@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "420359268221",
+    "firebase_url": "https://saesakdateapp-default-rtdb.firebaseio.com",
+    "project_id": "saesakdateapp",
+    "storage_bucket": "saesakdateapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:420359268221:android:07414e335cdca7e6ebce14",
+        "android_client_info": {
+          "package_name": "com.saesak.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "420359268221-rt13gp2fqa7397dda39v5on4v720q7nt.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.saesak.app",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "420359268221-rran1o958fh75hl73ba1t74au6bsd2ov.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBqinih9896O-rljaYaxbrBOCRKvDmKV-w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "420359268221-rran1o958fh75hl73ba1t74au6bsd2ov.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
