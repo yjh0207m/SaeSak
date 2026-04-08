@@ -63,6 +63,7 @@ export default function ChatRoomScreen() {
   const [imageUploading, setImageUploading] = useState(false);
   const [otherProfile, setOtherProfile] = useState<OtherProfile | null>(null);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [photoIndex, setPhotoIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const markedReadRef = useRef<Set<string>>(new Set());
 
@@ -256,7 +257,7 @@ export default function ChatRoomScreen() {
         onLongPress={isMine ? () => handleDeleteMessage(item) : undefined}
         senderPhoto={isMine ? null : (otherProfile?.photos?.[0] ?? null)}
         senderName={isMine ? null : (otherProfile?.nickname ?? otherUserNickname)}
-        onAvatarPress={isMine ? undefined : () => setProfileModalVisible(true)}
+        onAvatarPress={isMine ? undefined : () => { setPhotoIndex(0); setProfileModalVisible(true); }}
       />
     );
   };
@@ -279,17 +280,38 @@ export default function ChatRoomScreen() {
         onPress={() => setProfileModalVisible(false)}>
         <TouchableOpacity activeOpacity={1} style={styles.modalSheet}>
           {otherProfile?.photos?.length ? (
-            <ScrollView
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              style={styles.modalPhotoScroll}>
-              {otherProfile.photos.map((uri, i) => (
-                <Image key={i} source={{uri}} style={styles.modalPhoto} />
-              ))}
-            </ScrollView>
+            <View style={styles.modalPhotoWrap}>
+              <Image
+                source={{uri: otherProfile.photos[photoIndex]}}
+                style={{width: SCREEN_WIDTH, height: 280}}
+                resizeMode="cover"
+              />
+              {/* 좌우 버튼 */}
+              {photoIndex > 0 && (
+                <TouchableOpacity
+                  style={[styles.photoNavBtn, styles.photoNavLeft]}
+                  onPress={() => setPhotoIndex(i => i - 1)}>
+                  <Text style={styles.photoNavText}>‹</Text>
+                </TouchableOpacity>
+              )}
+              {photoIndex < otherProfile.photos.length - 1 && (
+                <TouchableOpacity
+                  style={[styles.photoNavBtn, styles.photoNavRight]}
+                  onPress={() => setPhotoIndex(i => i + 1)}>
+                  <Text style={styles.photoNavText}>›</Text>
+                </TouchableOpacity>
+              )}
+              {/* 점 인디케이터 */}
+              {otherProfile.photos.length > 1 && (
+                <View style={styles.dotRow}>
+                  {otherProfile.photos.map((_, i) => (
+                    <View key={i} style={[styles.dot, i === photoIndex && styles.dotActive]} />
+                  ))}
+                </View>
+              )}
+            </View>
           ) : (
-            <View style={[styles.modalPhoto, styles.modalPhotoPlaceholder]}>
+            <View style={styles.modalPhotoPlaceholder}>
               <Text style={{fontSize: 48}}>🌱</Text>
             </View>
           )}
@@ -408,16 +430,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     height: '75%',
   },
-  modalPhotoScroll: {height: 280, flexShrink: 0},
-  modalPhoto: {
-    width: SCREEN_WIDTH,
-    height: 280,
-  },
-  modalPhotoPlaceholder: {
-    backgroundColor: '#e8f5e9',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   modalInfo: {padding: 20},
   modalName: {fontSize: 22, fontWeight: '700', color: '#111', marginBottom: 6},
   modalMeta: {fontSize: 13, color: '#666', marginBottom: 4},
@@ -435,6 +447,31 @@ const styles = StyleSheet.create({
   modalSectionLabel: {fontSize: 13, fontWeight: '600', color: '#888', marginTop: 14, marginBottom: 6},
   modalTagIdeal: {backgroundColor: '#fff3f0', borderColor: '#ffccbc'},
   modalTagIdealText: {fontSize: 12, color: '#FF7043'},
+  modalPhotoWrap: {height: 280, position: 'relative'},
+  modalPhotoPlaceholder: {height: 280, backgroundColor: '#e8f5e9', justifyContent: 'center', alignItems: 'center'},
+  photoNavBtn: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.18)',
+  },
+  photoNavLeft: {left: 0},
+  photoNavRight: {right: 0},
+  photoNavText: {fontSize: 36, color: '#fff', fontWeight: '300', lineHeight: 42},
+  dotRow: {
+    position: 'absolute',
+    bottom: 10,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  dot: {width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.5)'},
+  dotActive: {backgroundColor: '#fff', width: 8, height: 8, borderRadius: 4},
   modalBottomPad: {height: 32},
   listContent: {
     paddingVertical: 12,

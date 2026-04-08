@@ -29,20 +29,22 @@ interface MatchItem {
   lastMessage: LastMessage | null;
 }
 
+const KST_OFFSET = 9 * 60 * 60 * 1000;
+
 function formatListTime(ts: number | null | undefined): string {
   if (!ts) {return '';}
-  const d = new Date(ts);
-  const now = new Date();
+  const d = new Date(ts + KST_OFFSET);
+  const now = new Date(Date.now() + KST_OFFSET);
   const isToday =
-    d.getDate() === now.getDate() &&
-    d.getMonth() === now.getMonth() &&
-    d.getFullYear() === now.getFullYear();
+    d.getUTCDate() === now.getUTCDate() &&
+    d.getUTCMonth() === now.getUTCMonth() &&
+    d.getUTCFullYear() === now.getUTCFullYear();
   if (isToday) {
-    const h = d.getHours();
-    const m = d.getMinutes().toString().padStart(2, '0');
+    const h = d.getUTCHours();
+    const m = d.getUTCMinutes().toString().padStart(2, '0');
     return `${h < 12 ? '오전' : '오후'} ${h % 12 || 12}:${m}`;
   }
-  return `${d.getMonth() + 1}/${d.getDate()}`;
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 }
 
 export default function ChatListScreen() {

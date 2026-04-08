@@ -13,6 +13,8 @@ export interface ProfileData {
   job?: string;
   job_field?: string;
   ideal_type_tags?: string[];
+  location?: {lat: number; lng: number} | null;
+  location_fuzzy?: {lat: number; lng: number} | null;
 }
 
 export interface FilterSettings {
