@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/3class_007/.claude/projects/c--Users-3class-007-StudioProjects-SaeSak/**)",
+      "Read(//c/Users/3class_007/.claude/projects/c--Users-3class-007-StudioProjects-SaeSak/memory/**)",
+      "Bash(npm install:*)",
+      "Bash(mv src/screens/auth/LoginScreen.js src/screens/auth/LoginScreen.tsx)",
+      "Bash(mv src/screens/auth/RegisterScreen.js src/screens/auth/RegisterScreen.tsx)",
+      "Bash(mv src/screens/auth/ProfileSetupScreen.js src/screens/auth/ProfileSetupScreen.tsx)",
+      "Bash(mv src/screens/match/SwipeScreen.js src/screens/match/SwipeScreen.tsx)",
+      "Bash(mv src/screens/match/MapScreen.js src/screens/match/MapScreen.tsx)",
+      "Bash(python3 -c ':*)"
+    ]
+  }
+}

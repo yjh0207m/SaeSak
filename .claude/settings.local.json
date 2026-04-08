@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Bash(./gradlew clean:*)",
+      "Bash(npx react-native:*)",
+      "Bash(npm run:*)",
+      "Bash(./gradlew app:installDebug --no-build-cache --no-configuration-cache -PreactNativeDevServerPort=8081)",
+      "Bash(./gradlew app:installDebug -PreactNativeDevServerPort=8081)",
+      "Bash(./gradlew.bat app:installDebug --rerun-tasks -PreactNativeDevServerPort=8081)",
+      "Bash(./gradlew.bat --stop)",
+      "Bash(./gradlew.bat app:installDebug -PreactNativeDevServerPort=8081)",
+      "Bash(xargs cat:*)",
+      "Bash(python3 -c \"import base64, binascii; sha1='5e8f16062ea3cd2c4a0d547876baa6f38cabf625'; print\\(base64.b64encode\\(binascii.unhexlify\\(sha1\\)\\).decode\\(\\)\\)\")",
+      "Bash(python -c \"import base64, binascii; sha1='5e8f16062ea3cd2c4a0d547876baa6f38cabf625'; print\\(base64.b64encode\\(binascii.unhexlify\\(sha1\\)\\).decode\\(\\)\\)\")",
+      "Read(//c/Users/3class_007/StudioProjects/**)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\3class_007\\.gradle\\caches"
+    ]
+  }
+}
