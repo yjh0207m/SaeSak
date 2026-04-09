@@ -63,7 +63,7 @@
 ## ✨ 주요 기능
 
 ### 🔐 인증
-- Google · Kakao 소셜 로그인
+- Google · Kakao 등 소셜 로그인
 - 프로필 완성도 표시 (항목별 가중치 계산)
 - 만 18세 미만 가입 차단
 
@@ -135,7 +135,10 @@ MyApp/src/
 
 ## 🚀 실행 방법
 
-### 사전 요구사항
+### 방법1 .apk 파일 설치
+- 안드로이드 환경에서 SaeSak/app-release.apk 설치
+
+### 방법2. 사전 요구사항
 - Node.js 22+
 - JDK 17+
 - Android Studio + Android SDK
@@ -152,9 +155,6 @@ MyApp/src/
 # 의존성 설치
 cd MyApp
 npm install
-
-# Metro 번들러 실행
-npm start
 
 # Android 빌드 & 실행
 npm run android
@@ -180,3 +180,12 @@ npm run android
 - 결제는 **테스트 모드** (실제 과금 없음)
 - 네이버 로그인 미지원 (React Native New Architecture 미호환)
 - iOS 빌드 미검증 (Android 전용 개발)
+
+## 🧰 추후 개선할 점
+- 갤럭시 하단 바 침범
+- 채팅 입력시 입력창을 가리는 문제
+- 벡터 아이콘 깨짐 문제(다른 아이콘 사용 고려)
+- 소셜 로그인 삭제. 전화번호 인증으로 통일 (가상인물 우려)
+- 내 활동 (좋아요, 슈퍼라이크 내역 조회) 추가
+- "활동 현황" -> "받은 Hype" 메뉴명 수정
+- 받은 Hype에서 긍정반응 상대 리스트, 프로필 조회
