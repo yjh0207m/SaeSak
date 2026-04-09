@@ -11,6 +11,12 @@ export const GENDERS = [
   {label: '기타', value: 'other'},
 ];
 
+export const PREFERRED_GENDERS = [
+  {label: '남성', value: 'male'},
+  {label: '여성', value: 'female'},
+  {label: '상관없음', value: 'any'},
+];
+
 export const JOB_FIELDS = [
   'IT/개발', '디자인/예술', '의료/보건', '교육',
   '금융/경제', '마케팅/광고', '법/행정', '서비스업',

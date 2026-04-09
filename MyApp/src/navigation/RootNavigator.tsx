@@ -1,5 +1,5 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {Text, TouchableOpacity} from 'react-native';
+import {Alert, Text, TouchableOpacity} from 'react-native';
 import {NavigationContainer} from '@react-navigation/native';
 import {createStackNavigator} from '@react-navigation/stack';
 import auth, {FirebaseAuthTypes} from '@react-native-firebase/auth';
@@ -134,7 +134,23 @@ export default function RootNavigator() {
             <Stack.Screen
               name="ProfileSetup"
               component={ProfileSetupScreen}
-              options={{headerShown: true, title: '프로필 설정', headerLeft: () => null}}
+              options={{
+                headerShown: true,
+                title: '프로필 설정',
+                headerLeft: () => null,
+                headerRight: () => (
+                  <TouchableOpacity
+                    style={{paddingRight: 16}}
+                    onPress={() =>
+                      Alert.alert('로그아웃', '로그아웃 하시겠어요?', [
+                        {text: '취소', style: 'cancel'},
+                        {text: '로그아웃', style: 'destructive', onPress: () => auth().signOut()},
+                      ])
+                    }>
+                    <Text style={{color: '#ff5252', fontSize: 14}}>로그아웃</Text>
+                  </TouchableOpacity>
+                ),
+              }}
             />
           )
         ) : (

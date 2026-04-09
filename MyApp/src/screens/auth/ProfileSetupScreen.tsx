@@ -15,7 +15,7 @@ import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import storage from '@react-native-firebase/storage';
 import {launchImageLibrary} from 'react-native-image-picker';
-import {HOBBY_TAGS, GENDERS, JOB_FIELDS, IDEAL_TYPE_TAGS} from '../../utils/constants';
+import {HOBBY_TAGS, GENDERS, JOB_FIELDS, IDEAL_TYPE_TAGS, PREFERRED_GENDERS} from '../../utils/constants';
 
 export default function ProfileSetupScreen() {
   const navigation = useNavigation();
@@ -29,6 +29,7 @@ export default function ProfileSetupScreen() {
   const [job, setJob] = useState('');
   const [jobField, setJobField] = useState('');
   const [idealTypeTags, setIdealTypeTags] = useState<string[]>([]);
+  const [preferredGender, setPreferredGender] = useState('any');
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -56,6 +57,7 @@ export default function ProfileSetupScreen() {
           setJob(data.job ?? '');
           setJobField(data.job_field ?? '');
           setIdealTypeTags(data.ideal_type_tags ?? []);
+          setPreferredGender(data.preferred_gender ?? 'any');
           setPhotos(data.photos ?? []);
         }
       })
@@ -142,6 +144,7 @@ export default function ProfileSetupScreen() {
           job: job.trim(),
           job_field: jobField,
           ideal_type_tags: idealTypeTags,
+          preferred_gender: preferredGender,
           activity_area: activityArea.trim(),
           location: null,       // 위치는 MATCH-03 구현 시 업데이트
           location_fuzzy: null,
@@ -248,6 +251,21 @@ export default function ProfileSetupScreen() {
                 styles.genderBtnText,
                 gender === g.value && styles.genderBtnTextActive,
               ]}>
+              {g.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* 매칭 상대 성별 */}
+      <Text style={styles.sectionTitle}>매칭 상대 성별</Text>
+      <View style={styles.genderRow}>
+        {PREFERRED_GENDERS.map(g => (
+          <TouchableOpacity
+            key={g.value}
+            style={[styles.genderBtn, preferredGender === g.value && styles.genderBtnActive]}
+            onPress={() => setPreferredGender(g.value)}>
+            <Text style={[styles.genderBtnText, preferredGender === g.value && styles.genderBtnTextActive]}>
               {g.label}
             </Text>
           </TouchableOpacity>

@@ -1,5 +1,6 @@
 import React, {useCallback, useRef, useState} from 'react';
 import {
+  Animated,
   ActivityIndicator,
   Alert,
   StyleSheet,
@@ -15,6 +16,7 @@ import firestore from '@react-native-firebase/firestore';
 import SwipeCard from '../../components/SwipeCard';
 import useMatchStore, {FilterSettings, ProfileData} from '../../store/matchStore';
 import {RootStackParamList} from '../../navigation/RootNavigator';
+import {useSubscription} from '../../hooks/useSubscription';
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -52,6 +54,20 @@ export default function SwipeScreen() {
   } = useMatchStore();
 
   const currentUid = auth().currentUser?.uid;
+  const {tier} = useSubscription();
+  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+
+  // 토스트
+  const [toastMsg, setToastMsg] = useState('');
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    Animated.sequence([
+      Animated.timing(toastOpacity, {toValue: 1, duration: 150, useNativeDriver: true}),
+      Animated.delay(1200),
+      Animated.timing(toastOpacity, {toValue: 0, duration: 300, useNativeDriver: true}),
+    ]).start();
+  };
 
   // 필터 적용 상태 표시
   const isFilterActive =
@@ -73,6 +89,7 @@ export default function SwipeScreen() {
         .get();
       const matchedUids = new Set<string>();
       matchSnap?.docs.forEach(doc => {
+        if (doc.data().status !== 'active') {return;} // cancelled는 재탐색 허용
         const ids: string[] = doc.data().user_ids ?? [];
         ids.forEach(id => { if (id !== currentUid) {matchedUids.add(id);} });
       });
@@ -82,12 +99,21 @@ export default function SwipeScreen() {
         .limit(50)
         .get();
 
+      // 내 preferred_gender 로드
+      const myProfile = await firestore().collection('profiles').doc(currentUid).get();
+      const myPreferredGender: string = myProfile.data()?.preferred_gender ?? 'any';
+
       const raw: ProfileData[] = snap.docs
-        .filter(doc =>
-          doc.id !== currentUid &&
-          !swipedUids.includes(doc.id) &&
-          !matchedUids.has(doc.id),
-        )
+        .filter(doc => {
+          if (doc.id === currentUid) {return false;}
+          if (swipedUids.includes(doc.id)) {return false;}
+          if (matchedUids.has(doc.id)) {return false;}
+          if (myPreferredGender !== 'any') {
+            const gender = doc.data().gender;
+            if (gender !== myPreferredGender) {return false;}
+          }
+          return true;
+        })
         .map(doc => ({uid: doc.id, ...(doc.data() as Omit<ProfileData, 'uid'>)}));
 
       const filtered = applyFilter(raw, filter);
@@ -132,13 +158,25 @@ export default function SwipeScreen() {
           mutualSnap.docs.some(d => ['like', 'super'].includes(d.data().type));
 
         if (hasMutualLike) {
-          await firestore().collection('matches').add({
-            user_ids: [currentUid, toProfile.uid],
-            status: 'active',
-            meeting_plan: null,
-            safety_checked: false,
-            created_at: firestore.FieldValue.serverTimestamp(),
-          });
+          // 기존 cancelled 매치가 있으면 재활성화, 없으면 새로 생성
+          const existingSnap = await firestore()
+            .collection('matches')
+            .where('user_ids', 'array-contains', currentUid)
+            .get();
+          const cancelled = existingSnap?.docs.find(
+            d => d.data().status === 'cancelled' && d.data().user_ids.includes(toProfile.uid),
+          );
+          if (cancelled) {
+            await firestore().collection('matches').doc(cancelled.id).update({status: 'active'});
+          } else {
+            await firestore().collection('matches').add({
+              user_ids: [currentUid, toProfile.uid],
+              status: 'active',
+              meeting_plan: null,
+              safety_checked: false,
+              created_at: firestore.FieldValue.serverTimestamp(),
+            });
+          }
           Alert.alert('🎉 매칭 성립!', `${toProfile.nickname}님과 매칭됐어요! 채팅을 시작해보세요.`);
         }
       }
@@ -178,6 +216,7 @@ export default function SwipeScreen() {
     if (!profile) {return;}
     lastSwipedProfileRef.current = profile;
     saveSwipe(profile, 'like');
+    if (showButtons) {showToast(`♥ ${profile.nickname}님을 좋아해요!`);}
   };
 
   const handleSuperLike = async (index: number) => {
@@ -188,9 +227,12 @@ export default function SwipeScreen() {
     if (!ok) {
       Alert.alert('코인 부족', '슈퍼라이크에는 코인 1개가 필요해요.');
       saveSwipe(profile, 'like');
+      if (showButtons) {showToast(`♥ ${profile.nickname}님을 좋아해요!`);}
       return;
     }
     saveSwipe(profile, 'super');
+    if (showButtons) {showToast(`★ ${profile.nickname}님께 슈퍼라이크!`);}
+
   };
 
   const handleUndo = async () => {
@@ -210,6 +252,62 @@ export default function SwipeScreen() {
       swiperRef.current?.swipeBack();
     } catch {
       Alert.alert('오류', '되돌리기에 실패했습니다.');
+    }
+  };
+
+  // 플러팅 (새싹++ 전용)
+  const handleFlirt = async () => {
+    if (!currentUid) {return;}
+    const target = profiles[currentCardIndex];
+    if (!target) {return;}
+
+    // 주간 횟수 체크
+    try {
+      const userDoc = await firestore().collection('users').doc(currentUid).get();
+      const userData = userDoc.data() ?? {};
+      const weekStart: Date | null = userData.flirting_week_start?.toDate() ?? null;
+      const now = new Date();
+      const thisMonday = new Date(now);
+      thisMonday.setHours(0, 0, 0, 0);
+      thisMonday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+
+      const sameWeek = weekStart && weekStart >= thisMonday;
+      const count: number = sameWeek ? (userData.flirting_count_week ?? 0) : 0;
+
+      if (count >= 3) {
+        Alert.alert('플러팅 한도', '이번 주 플러팅을 모두 사용했어요.\n다음 주 월요일에 3회 충전돼요.');
+        return;
+      }
+
+      Alert.alert(
+        '💌 플러팅',
+        `${target.nickname}님에게 플러팅을 보낼까요?\n상대방이 수락하면 바로 매칭이 성립돼요!\n(이번 주 ${3 - count}회 남음)`,
+        [
+          {text: '취소', style: 'cancel'},
+          {
+            text: '보내기',
+            onPress: async () => {
+              try {
+                await firestore().collection('flirtings').add({
+                  from_uid: currentUid,
+                  to_uid: target.uid,
+                  status: 'pending',
+                  created_at: firestore.FieldValue.serverTimestamp(),
+                });
+                await firestore().collection('users').doc(currentUid).update({
+                  flirting_count_week: count + 1,
+                  flirting_week_start: sameWeek ? userData.flirting_week_start : thisMonday,
+                });
+                Alert.alert('💌 플러팅 발송!', `${target.nickname}님의 답장을 기다려봐요.`);
+              } catch {
+                Alert.alert('오류', '플러팅 발송에 실패했어요.');
+              }
+            },
+          },
+        ],
+      );
+    } catch {
+      Alert.alert('오류', '플러팅을 보내는 중 문제가 발생했어요.');
     }
   };
 
@@ -240,6 +338,11 @@ export default function SwipeScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* 토스트 */}
+      <Animated.View style={[styles.toast, {opacity: toastOpacity}]} pointerEvents="none">
+        <Text style={styles.toastText}>{toastMsg}</Text>
+      </Animated.View>
 
       {/* 카드 영역 + 버튼 오버레이 */}
       <View style={styles.cardArea}>
@@ -278,6 +381,7 @@ export default function SwipeScreen() {
               onSwipedLeft={handleSuperLike}
               onSwipedRight={handleLike}
               onSwipedTop={handlePass}
+              onSwiped={i => setCurrentCardIndex(i + 1)}
               onSwipedAll={() => setNoMoreCards(true)}
               verticalSwipe
               horizontalSwipe
@@ -289,29 +393,6 @@ export default function SwipeScreen() {
               cardVerticalMargin={0}
               animateCardOpacity
               disableBottomSwipe
-              overlayLabels={{
-                left: {
-                  title: 'SUPER',
-                  style: {
-                    label: {color: '#29b6f6', borderColor: '#29b6f6', fontSize: 28, fontWeight: '700', borderWidth: 3, borderRadius: 8, padding: 6},
-                    wrapper: {flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'flex-start', marginTop: 40, marginLeft: -20},
-                  },
-                },
-                right: {
-                  title: 'LIKE',
-                  style: {
-                    label: {color: '#4CAF50', borderColor: '#4CAF50', fontSize: 28, fontWeight: '700', borderWidth: 3, borderRadius: 8, padding: 6},
-                    wrapper: {flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', marginTop: 40, marginLeft: 20},
-                  },
-                },
-                top: {
-                  title: 'PASS',
-                  style: {
-                    label: {color: '#ff4458', borderColor: '#ff4458', fontSize: 28, fontWeight: '700', borderWidth: 3, borderRadius: 8, padding: 6},
-                    wrapper: {flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 40},
-                  },
-                },
-              }}
             />
           )}
         </View>
@@ -336,12 +417,26 @@ export default function SwipeScreen() {
               <Text style={styles.likeBtnText}>♥</Text>
             </TouchableOpacity>
           </View>
-          {/* UNDO — 하단 중앙 */}
+          {/* UNDO + 플러팅 — 하단 */}
           <View style={styles.btnBottom} pointerEvents="box-none">
-            <TouchableOpacity style={styles.undoBtn} onPress={handleUndo}>
-              <Text style={styles.undoBtnText}>↩</Text>
-            </TouchableOpacity>
-            <Text style={styles.actionHint}>되돌리기 (1일 1회)</Text>
+            <View style={styles.btnBottomRow}>
+              <TouchableOpacity style={styles.undoBtn} onPress={handleUndo}>
+                <Text style={styles.undoBtnText}>↩</Text>
+              </TouchableOpacity>
+              {tier === 'sprout_plus_plus' ? (
+                <TouchableOpacity style={styles.flirtBtn} onPress={handleFlirt}>
+                  <Text style={styles.flirtBtnText}>💌</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.flirtBtnLocked}
+                  onPress={() => navigation.navigate('Premium')}>
+                  <Text style={styles.flirtBtnText}>💌</Text>
+                  <Text style={styles.flirtLockText}>🔒</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <Text style={styles.actionHint}>↩되돌리기 · 💌플러팅(새싹++)</Text>
           </View>
         </View>}
       </View>
@@ -350,8 +445,8 @@ export default function SwipeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#fafafa'},
-  center: {flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fafafa'},
+  container: {flex: 1, backgroundColor: '#151a28'},
+  center: {flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#151a28'},
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -360,7 +455,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 8,
   },
-  header: {fontSize: 22, fontWeight: '700', color: '#4CAF50'},
+  header: {fontSize: 22, fontWeight: '700', color: '#4CAF50', backgroundColor: '#151a28'},
   headerRight: {flexDirection: 'row', alignItems: 'center', gap: 8},
   toggleBtn: {padding: 6},
   toggleBtnText: {fontSize: 18},
@@ -369,10 +464,10 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#ccc',
+    borderColor: 'rgba(255,255,255,0.2)',
   },
-  filterBtnActive: {borderColor: '#4CAF50', backgroundColor: '#f1f8f1'},
-  filterBtnText: {fontSize: 13, color: '#999'},
+  filterBtnActive: {borderColor: '#4CAF50', backgroundColor: 'rgba(76,175,80,0.15)'},
+  filterBtnText: {fontSize: 13, color: 'rgba(255,255,255,0.5)'},
   filterBtnTextActive: {color: '#4CAF50', fontWeight: '600'},
   cardArea: {
     flex: 1,
@@ -421,7 +516,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  actionHint: {fontSize: 11, color: '#ddd', textAlign: 'center'},
+  actionHint: {fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'center'},
   undoBtn: {width: 56, height: 56, borderRadius: 22, backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#ffd740', justifyContent: 'center', alignItems: 'center', elevation: 2},
   undoBtnText: {fontSize: 22, color: '#ffd740'},
   passBtn: {width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff', borderWidth: 2, borderColor: '#ff4458', justifyContent: 'center', alignItems: 'center', elevation: 3},
@@ -432,11 +527,29 @@ const styles = StyleSheet.create({
   likeBtnText: {fontSize: 22, color: '#4CAF50'},
   emptyInner: {flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24},
   emptyIcon: {fontSize: 64, marginBottom: 16},
-  emptyTitle: {fontSize: 18, fontWeight: '600', color: '#333', marginBottom: 8},
-  emptySub: {fontSize: 14, color: '#aaa', marginBottom: 24},
+  emptyTitle: {fontSize: 18, fontWeight: '600', color: '#fff', marginBottom: 8},
+  emptySub: {fontSize: 14, color: 'rgba(255,255,255,0.5)', marginBottom: 24},
   emptyButtons: {flexDirection: 'row', gap: 10},
   filterBtnOutline: {paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, borderWidth: 1.5, borderColor: '#4CAF50'},
   filterBtnOutlineText: {color: '#4CAF50', fontWeight: '600'},
   refreshBtn: {paddingHorizontal: 24, paddingVertical: 12, backgroundColor: '#4CAF50', borderRadius: 24},
   refreshBtnText: {color: '#fff', fontWeight: '600'},
+
+  toast: {
+    position: 'absolute',
+    top: 72,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    zIndex: 100,
+  },
+  toastText: {color: '#fff', fontSize: 14, fontWeight: '600'},
+
+  btnBottomRow: {flexDirection: 'row', gap: 16, alignItems: 'center'},
+  flirtBtn: {width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff', borderWidth: 2, borderColor: '#9c27b0', justifyContent: 'center', alignItems: 'center', elevation: 3},
+  flirtBtnLocked: {width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff', borderWidth: 2, borderColor: '#ddd', justifyContent: 'center', alignItems: 'center', elevation: 2, opacity: 0.6},
+  flirtBtnText: {fontSize: 22},
+  flirtLockText: {fontSize: 10, position: 'absolute', bottom: 6, right: 6},
 });

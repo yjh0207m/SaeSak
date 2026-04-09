@@ -1,5 +1,6 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
+  Animated,
   ActivityIndicator,
   Alert,
   Dimensions,
@@ -26,6 +27,14 @@ import {launchImageLibrary} from 'react-native-image-picker';
 import ChatBubble from '../../components/ChatBubble';
 import useChatStore from '../../store/chatStore';
 import {RootStackParamList} from '../../navigation/RootNavigator';
+
+interface ExclusivityDoc {
+  id: string;
+  user_ids: string[];
+  status: 'active' | 'ended';
+  expires_at: {toDate: () => Date} | null;
+  cancelled_by: string | null;
+}
 
 interface Message {
   id: string;
@@ -64,16 +73,39 @@ export default function ChatRoomScreen() {
   const [otherProfile, setOtherProfile] = useState<OtherProfile | null>(null);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
+
+  // 매칭 상태
+  const [matchStatus, setMatchStatus] = useState<'active' | 'cancelled'>('active');
+
+  // 독점
+  const [exclusivity, setExclusivity] = useState<ExclusivityDoc | null>(null);
+  const [exCooldownUntil, setExCooldownUntil] = useState<Date | null>(null);
+  const [exLoading, setExLoading] = useState(false);
+
+  // + 메뉴
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuAnim = useRef(new Animated.Value(0)).current;
+  const toggleMenu = () => {
+    const open = !menuOpen;
+    setMenuOpen(open);
+    Animated.timing(menuAnim, {
+      toValue: open ? 1 : 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  };
   const flatListRef = useRef<FlatList>(null);
   const markedReadRef = useRef<Set<string>>(new Set());
 
   const {setActiveMatchId} = useChatStore();
   const currentUid = auth().currentUser?.uid;
 
-  // 헤더 타이틀 설정
+  // 헤더 타이틀 (독점 활성 시 💍 표시)
   useEffect(() => {
-    navigation.setOptions({title: otherUserNickname});
-  }, [navigation, otherUserNickname]);
+    navigation.setOptions({
+      title: exclusivity ? `💍 ${otherUserNickname}` : otherUserNickname,
+    });
+  }, [navigation, otherUserNickname, exclusivity]);
 
   // 상대방 프로필 로드
   useEffect(() => {
@@ -105,6 +137,211 @@ export default function ChatRoomScreen() {
     setActiveMatchId(matchId);
     return () => setActiveMatchId(null);
   }, [matchId, setActiveMatchId]);
+
+  // 매칭 상태 실시간 구독
+  useEffect(() => {
+    const unsub = firestore()
+      .collection('matches')
+      .doc(matchId)
+      .onSnapshot(snap => {
+        const status = snap?.data()?.status;
+        setMatchStatus(status === 'cancelled' ? 'cancelled' : 'active');
+      }, () => {});
+    return unsub;
+  }, [matchId]);
+
+  // 매칭 취소
+  const handleCancelMatch = () => {
+    Alert.alert(
+      '💔 매칭 취소',
+      '매칭을 취소할까요?\n대화 내용은 남아있고, 탐색에서 다시 만날 수 있어요.',
+      [
+        {text: '취소', style: 'cancel'},
+        {
+          text: '매칭 취소',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await firestore()
+                .collection('matches')
+                .doc(matchId)
+                .update({status: 'cancelled'});
+            } catch {
+              Alert.alert('오류', '매칭 취소 중 문제가 발생했어요.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // 독점 상태 로드 + 자동 연장 체크
+  useEffect(() => {
+    if (!currentUid) {return;}
+    const unsub = firestore()
+      .collection('exclusivity')
+      .where('user_ids', 'array-contains', currentUid)
+      .where('status', '==', 'active')
+      .onSnapshot(async snap => {
+        const doc = snap?.docs.find(d =>
+          d.data().user_ids.includes(otherUserUid),
+        );
+        if (!doc) {setExclusivity(null); return;}
+
+        const data = doc.data();
+        const exDoc: ExclusivityDoc = {
+          id: doc.id,
+          user_ids: data.user_ids,
+          status: data.status,
+          expires_at: data.expires_at ?? null,
+          cancelled_by: data.cancelled_by ?? null,
+        };
+
+        // 자동 연장 체크
+        const expiresAt: Date | null = data.expires_at?.toDate() ?? null;
+        if (expiresAt && expiresAt < new Date()) {
+          // 코인 10개 차감 후 4주 연장
+          try {
+            let renewed = false;
+            await firestore().runTransaction(async tx => {
+              const userRef = firestore().collection('users').doc(currentUid);
+              const userDoc = await tx.get(userRef);
+              const balance: number = userDoc.data()?.coin_balance ?? 0;
+              if (balance < 10) {return;}
+              tx.update(userRef, {coin_balance: balance - 10});
+              const newExpiry = new Date();
+              newExpiry.setDate(newExpiry.getDate() + 28);
+              tx.update(firestore().collection('exclusivity').doc(doc.id), {
+                expires_at: newExpiry,
+              });
+              renewed = true;
+            });
+            if (renewed) {
+              Alert.alert('💍 독점 자동 연장', '독점이 4주 연장됐어요 🪙 -10코인');
+            } else {
+              // 코인 부족 → 독점 종료
+              await firestore().collection('exclusivity').doc(doc.id).update({
+                status: 'ended',
+                cancelled_by: null,
+              });
+              Alert.alert('독점 해제', '코인이 부족해 독점이 자동 해제됐어요.');
+            }
+          } catch {}
+          return;
+        }
+
+        setExclusivity(exDoc);
+      }, () => {});
+
+    // 내 쿨다운 로드
+    firestore()
+      .collection('users')
+      .doc(currentUid)
+      .get()
+      .then(doc => {
+        const until: Date | null = doc.data()?.exclusivity_cooldown_until?.toDate() ?? null;
+        setExCooldownUntil(until && until > new Date() ? until : null);
+      })
+      .catch(() => {});
+
+    return unsub;
+  }, [currentUid, otherUserUid]);
+
+  // 독점 선언
+  const handleDeclareExclusivity = async () => {
+    if (!currentUid) {return;}
+
+    if (exCooldownUntil) {
+      const days = Math.ceil((exCooldownUntil.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      Alert.alert('독점 불가', `${days}일 후 독점 선언이 가능해요.`);
+      return;
+    }
+
+    Alert.alert(
+      '💍 독점 선언',
+      `${otherUserNickname}님과 독점 관계를 시작할까요?\n\n🪙 10코인 소모 · 4주 지속\n자동 연장 시 동일 비용\n내가 해제하면 2주, 상대가 해제하면 1주 독점 불가`,
+      [
+        {text: '취소', style: 'cancel'},
+        {
+          text: '선언하기',
+          onPress: async () => {
+            setExLoading(true);
+            try {
+              let success = false;
+              await firestore().runTransaction(async tx => {
+                const userRef = firestore().collection('users').doc(currentUid);
+                const userDoc = await tx.get(userRef);
+                const balance: number = userDoc.data()?.coin_balance ?? 0;
+                if (balance < 10) {return;}
+                tx.update(userRef, {coin_balance: balance - 10});
+                success = true;
+              });
+              if (!success) {
+                Alert.alert('코인 부족', '독점 선언에는 코인 10개가 필요해요.');
+                return;
+              }
+              const expiry = new Date();
+              expiry.setDate(expiry.getDate() + 28);
+              await firestore().collection('exclusivity').add({
+                user_ids: [currentUid, otherUserUid],
+                status: 'active',
+                started_at: firestore.FieldValue.serverTimestamp(),
+                expires_at: expiry,
+                cancelled_by: null,
+              });
+              Alert.alert('💍 독점 시작!', `${otherUserNickname}님과의 독점이 시작됐어요.`);
+            } catch {
+              Alert.alert('오류', '독점 선언 중 문제가 발생했어요.');
+            } finally {
+              setExLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // 독점 해제
+  const handleCancelExclusivity = () => {
+    if (!currentUid || !exclusivity) {return;}
+    Alert.alert(
+      '독점 해제',
+      '독점을 해제할까요?\n해제 후 2주간 독점 선언이 불가해요.',
+      [
+        {text: '취소', style: 'cancel'},
+        {
+          text: '해제',
+          style: 'destructive',
+          onPress: async () => {
+            setExLoading(true);
+            try {
+              const now = new Date();
+              const myCooldown = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+              const otherCooldown = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+              const batch = firestore().batch();
+              batch.update(firestore().collection('exclusivity').doc(exclusivity.id), {
+                status: 'ended',
+                cancelled_by: currentUid,
+              });
+              batch.update(firestore().collection('users').doc(currentUid), {
+                exclusivity_cooldown_until: myCooldown,
+              });
+              batch.update(firestore().collection('users').doc(otherUserUid), {
+                exclusivity_cooldown_until: otherCooldown,
+              });
+              await batch.commit();
+              setExCooldownUntil(myCooldown);
+              setExclusivity(null);
+            } catch {
+              Alert.alert('오류', '독점 해제 중 문제가 발생했어요.');
+            } finally {
+              setExLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   // 메시지 실시간 구독
   useEffect(() => {
@@ -374,29 +611,92 @@ export default function ChatRoomScreen() {
         showsVerticalScrollIndicator={false}
       />
 
+      {/* + 메뉴 패널 */}
+      <Animated.View
+        style={[
+          styles.menuPanel,
+          {
+            opacity: menuAnim,
+            transform: [{translateY: menuAnim.interpolate({inputRange: [0, 1], outputRange: [12, 0]})}],
+          },
+        ]}
+        pointerEvents={menuOpen ? 'auto' : 'none'}>
+        {/* 사진 */}
+        <TouchableOpacity
+          style={styles.menuItem}
+          disabled={matchStatus === 'cancelled'}
+          onPress={() => { toggleMenu(); handleImageSend(); }}>
+          {imageUploading
+            ? <ActivityIndicator size="small" color="#4CAF50" />
+            : <Text style={styles.menuItemIcon}>📷</Text>}
+          <Text style={styles.menuItemLabel}>사진</Text>
+        </TouchableOpacity>
+        {/* 독점 선언 / 해제 */}
+        <TouchableOpacity
+          style={styles.menuItem}
+          disabled={exLoading || matchStatus === 'cancelled'}
+          onPress={() => {
+            toggleMenu();
+            exclusivity ? handleCancelExclusivity() : handleDeclareExclusivity();
+          }}>
+          {exLoading
+            ? <ActivityIndicator size="small" color="#9c27b0" />
+            : <Text style={styles.menuItemIcon}>💍</Text>}
+          <Text style={[styles.menuItemLabel, {color: '#9c27b0'}]}>
+            {exclusivity
+              ? '독점 해제'
+              : exCooldownUntil
+              ? `쿨다운 ${Math.ceil((exCooldownUntil.getTime() - Date.now()) / 86400000)}일`
+              : '독점 선언'}
+          </Text>
+        </TouchableOpacity>
+        {/* 매칭 취소 */}
+        {matchStatus === 'active' && (
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => { toggleMenu(); handleCancelMatch(); }}>
+            <Text style={styles.menuItemIcon}>💔</Text>
+            <Text style={[styles.menuItemLabel, {color: '#ff5252'}]}>매칭 취소</Text>
+          </TouchableOpacity>
+        )}
+        {/* 신고 */}
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => { toggleMenu(); Alert.alert('신고', '신고 기능은 준비 중이에요.'); }}>
+          <Text style={styles.menuItemIcon}>🚨</Text>
+          <Text style={[styles.menuItemLabel, {color: '#ff5252'}]}>신고</Text>
+        </TouchableOpacity>
+      </Animated.View>
+
+      {/* 매칭 취소 배너 */}
+      {matchStatus === 'cancelled' && (
+        <View style={styles.cancelledBanner}>
+          <Text style={styles.cancelledBannerText}>
+            💔 매칭이 취소됐어요 · 탐색에서 다시 만날 수 있어요
+          </Text>
+        </View>
+      )}
+
       {/* 입력 바 */}
       <View style={styles.inputBar}>
         <TouchableOpacity
-          style={styles.imageBtn}
-          onPress={handleImageSend}
-          disabled={imageUploading}>
-          {imageUploading ? (
-            <ActivityIndicator size="small" color="#4CAF50" />
-          ) : (
-            <Text style={styles.imageBtnText}>📷</Text>
-          )}
+          style={styles.plusBtn}
+          onPress={toggleMenu}
+          disabled={matchStatus === 'cancelled'}>
+          <Text style={[styles.plusBtnText, menuOpen && styles.plusBtnTextOpen]}>＋</Text>
         </TouchableOpacity>
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, matchStatus === 'cancelled' && styles.inputDisabled]}
           value={text}
           onChangeText={setText}
-          placeholder="메시지를 입력하세요"
+          placeholder={matchStatus === 'cancelled' ? '매칭이 취소됐어요' : '메시지를 입력하세요'}
           placeholderTextColor="#aaa"
           multiline
           maxLength={500}
           returnKeyType="send"
           onSubmitEditing={handleSend}
+          editable={matchStatus !== 'cancelled'}
         />
 
         <TouchableOpacity
@@ -416,7 +716,7 @@ export default function ChatRoomScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#fff'},
+  container: {flex: 1, backgroundColor: '#151a28'},
   // 모달
   modalBackdrop: {
     flex: 1,
@@ -483,30 +783,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    backgroundColor: '#fff',
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#1e2538',
   },
-  imageBtn: {
-    width: 36,
-    height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-    marginBottom: 2,
-  },
-  imageBtnText: {fontSize: 22},
   input: {
     flex: 1,
     minHeight: 36,
     maxHeight: 120,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: 'rgba(255,255,255,0.15)',
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: Platform.OS === 'ios' ? 8 : 4,
     fontSize: 15,
-    color: '#222',
+    color: '#fff',
     marginRight: 8,
+    backgroundColor: '#151a28',
   },
   sendBtn: {
     backgroundColor: '#4CAF50',
@@ -519,4 +811,36 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: {backgroundColor: '#c8e6c9'},
   sendBtnText: {color: '#fff', fontWeight: '600', fontSize: 14},
+
+  // + 메뉴
+  menuPanel: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    gap: 24,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#1e2538',
+  },
+  menuItem: {alignItems: 'center', gap: 4},
+  menuItemIcon: {fontSize: 28},
+  menuItemLabel: {fontSize: 11, color: 'rgba(255,255,255,0.6)', fontWeight: '600'},
+  plusBtn: {
+    width: 36, height: 36,
+    justifyContent: 'center', alignItems: 'center',
+    marginRight: 8, marginBottom: 2,
+  },
+  plusBtnText: {fontSize: 26, color: 'rgba(255,255,255,0.3)', lineHeight: 30},
+  plusBtnTextOpen: {color: '#4CAF50'},
+
+  cancelledBanner: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#ffeaea',
+    borderTopWidth: 1,
+    borderTopColor: '#ffcdd2',
+    alignItems: 'center',
+  },
+  cancelledBannerText: {fontSize: 13, color: '#c62828', fontWeight: '500'},
+  inputDisabled: {backgroundColor: '#f5f5f5', color: '#aaa'},
 });

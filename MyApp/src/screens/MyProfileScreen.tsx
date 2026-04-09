@@ -31,11 +31,18 @@ interface UserData {
   is_premium: boolean;
 }
 
+interface Stats {
+  likes: number;
+  superlikes: number;
+  matches: number;
+}
+
 export default function MyProfileScreen() {
   const navigation = useNavigation<Nav>();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<Stats>({likes: 0, superlikes: 0, matches: 0});
 
   const uid = auth().currentUser?.uid;
 
@@ -57,6 +64,48 @@ export default function MyProfileScreen() {
         if (snap?.exists()) setUserData(snap.data() as UserData);
         setLoading(false);
       }, () => setLoading(false));
+
+    // 통계 로드
+    const loadStats = async () => {
+      try {
+        const [likeSnap, superSnap, matchSnap] = await Promise.all([
+          firestore().collection('swipes').where('to_uid', '==', uid).where('type', '==', 'like').get(),
+          firestore().collection('swipes').where('to_uid', '==', uid).where('type', '==', 'super').get(),
+          firestore().collection('matches').where('user_ids', 'array-contains', uid).where('status', '==', 'active').get(),
+        ]);
+        setStats({
+          likes: likeSnap.size,
+          superlikes: superSnap.size,
+          matches: matchSnap.size,
+        });
+      } catch {}
+    };
+    loadStats();
+
+    // 주간 코인 지급 체크
+    const grantWeeklyCoins = async () => {
+      try {
+        const subSnap = await firestore().collection('subscriptions').doc(uid).get();
+        if (!subSnap.exists()) {return;}
+        const sub = subSnap.data()!;
+        const exp: Date | null = sub.expires_at?.toDate() ?? null;
+        if (!exp || exp < new Date()) {return;}
+        const lastGrant: Date | null = sub.weekly_coin_granted_at?.toDate() ?? null;
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
+        if (lastGrant && Date.now() - lastGrant.getTime() < sevenDays) {return;}
+        const coins: number = sub.tier === 'sprout_plus_plus' ? 15 : 5;
+        await firestore().runTransaction(async tx => {
+          const userRef = firestore().collection('users').doc(uid);
+          const userDoc = await tx.get(userRef);
+          tx.update(userRef, {coin_balance: (userDoc.data()?.coin_balance ?? 0) + coins});
+          tx.update(firestore().collection('subscriptions').doc(uid), {
+            weekly_coin_granted_at: firestore.FieldValue.serverTimestamp(),
+          });
+        });
+      } catch {}
+    };
+    grantWeeklyCoins();
+
     return () => {
       unsub1();
       unsub2();
@@ -117,6 +166,30 @@ export default function MyProfileScreen() {
             {userData?.is_premium ? '구독 중' : '업그레이드 →'}
           </Text>
         </TouchableOpacity>
+      </View>
+
+      {/* 활동 대시보드 */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>활동 현황</Text>
+        <View style={styles.dashRow}>
+          <View style={styles.dashItem}>
+            <Text style={styles.dashValue}>{stats.likes}</Text>
+            <Text style={styles.dashLabel}>받은 좋아요</Text>
+            <Text style={styles.dashEmoji}>♥</Text>
+          </View>
+          <View style={styles.dashDivider} />
+          <View style={styles.dashItem}>
+            <Text style={[styles.dashValue, {color: '#29b6f6'}]}>{stats.superlikes}</Text>
+            <Text style={styles.dashLabel}>슈퍼라이크</Text>
+            <Text style={styles.dashEmoji}>★</Text>
+          </View>
+          <View style={styles.dashDivider} />
+          <View style={styles.dashItem}>
+            <Text style={[styles.dashValue, {color: '#4CAF50'}]}>{stats.matches}</Text>
+            <Text style={styles.dashLabel}>매칭</Text>
+            <Text style={styles.dashEmoji}>💚</Text>
+          </View>
+        </View>
       </View>
 
       {/* 프로필 완성도 */}
@@ -251,4 +324,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   logoutText: {color: '#ff5252', fontSize: 15, fontWeight: '600'},
+
+  dashRow: {flexDirection: 'row', alignItems: 'center', marginTop: 8},
+  dashItem: {flex: 1, alignItems: 'center', paddingVertical: 8},
+  dashValue: {fontSize: 26, fontWeight: '800', color: '#ff4458'},
+  dashLabel: {fontSize: 12, color: '#888', marginTop: 2},
+  dashEmoji: {fontSize: 16, marginTop: 4},
+  dashDivider: {width: 1, height: 40, backgroundColor: '#f0f0f0'},
 });

@@ -1,8 +1,10 @@
 import React, {useEffect, useState} from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -13,6 +15,14 @@ import {StackNavigationProp} from '@react-navigation/stack';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import {RootStackParamList} from '../../navigation/RootNavigator';
+
+interface FlirtingItem {
+  id: string;
+  from_uid: string;
+  from_nickname: string;
+  from_photo: string | null;
+  created_at: number;
+}
 
 interface LastMessage {
   content: string;
@@ -51,8 +61,74 @@ export default function ChatListScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const [matches, setMatches] = useState<MatchItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [flirtings, setFlirtings] = useState<FlirtingItem[]>([]);
 
   const currentUid = auth().currentUser?.uid;
+
+  // 플러팅 수신함 로드
+  useEffect(() => {
+    if (!currentUid) {return;}
+    const unsub = firestore()
+      .collection('flirtings')
+      .where('to_uid', '==', currentUid)
+      .where('status', '==', 'pending')
+      .onSnapshot(async snap => {
+        if (!snap || snap.empty) {setFlirtings([]); return;}
+        const items = await Promise.all(
+          snap.docs.map(async doc => {
+            const d = doc.data();
+            let from_nickname = '알 수 없음';
+            let from_photo: string | null = null;
+            try {
+              const p = await firestore().collection('profiles').doc(d.from_uid).get();
+              if (p.exists()) {
+                from_nickname = p.data()!.nickname ?? from_nickname;
+                from_photo = p.data()!.photos?.[0] ?? null;
+              }
+            } catch {}
+            return {
+              id: doc.id,
+              from_uid: d.from_uid,
+              from_nickname,
+              from_photo,
+              created_at: d.created_at?.toMillis() ?? 0,
+            } as FlirtingItem;
+          }),
+        );
+        setFlirtings(items.sort((a, b) => b.created_at - a.created_at));
+      }, () => {});
+    return unsub;
+  }, [currentUid]);
+
+  const handleAcceptFlirting = async (item: FlirtingItem) => {
+    if (!currentUid) {return;}
+    Alert.alert(
+      '플러팅 수락',
+      `${item.from_nickname}님의 플러팅을 수락할까요?\n수락하면 바로 매칭이 성립돼요!`,
+      [
+        {text: '거절', style: 'cancel', onPress: async () => {
+          await firestore().collection('flirtings').doc(item.id)
+            .update({status: 'rejected'}).catch(() => {});
+        }},
+        {text: '수락', onPress: async () => {
+          try {
+            await firestore().collection('flirtings').doc(item.id)
+              .update({status: 'accepted'});
+            await firestore().collection('matches').add({
+              user_ids: [currentUid, item.from_uid],
+              status: 'active',
+              meeting_plan: null,
+              safety_checked: false,
+              created_at: firestore.FieldValue.serverTimestamp(),
+            });
+            Alert.alert('🎉 매칭 성립!', `${item.from_nickname}님과 매칭됐어요!`);
+          } catch {
+            Alert.alert('오류', '처리 중 문제가 발생했어요.');
+          }
+        }},
+      ],
+    );
+  };
 
   useEffect(() => {
     if (!currentUid) {return;}
@@ -186,6 +262,33 @@ export default function ChatListScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.header}>💬 채팅</Text>
+
+      {/* 플러팅 수신함 */}
+      {flirtings.length > 0 && (
+        <View style={styles.flirtSection}>
+          <Text style={styles.flirtTitle}>💌 플러팅 {flirtings.length}건</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.flirtScroll}>
+            {flirtings.map(item => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.flirtCard}
+                onPress={() => handleAcceptFlirting(item)}>
+                {item.from_photo ? (
+                  <Image source={{uri: item.from_photo}} style={styles.flirtAvatar} />
+                ) : (
+                  <View style={styles.flirtAvatarFallback}>
+                    <Text style={{fontSize: 20}}>🌱</Text>
+                  </View>
+                )}
+                <Text style={styles.flirtName} numberOfLines={1}>{item.from_nickname}</Text>
+                <View style={styles.flirtBadge}>
+                  <Text style={styles.flirtBadgeText}>수락하기</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
       {matches.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.emptyIcon}>🌱</Text>
@@ -205,12 +308,12 @@ export default function ChatListScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#fff'},
+  container: {flex: 1, backgroundColor: '#151a28'},
   center: {flex: 1, justifyContent: 'center', alignItems: 'center'},
   header: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#222',
+    color: '#fff',
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 12,
@@ -231,7 +334,7 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: 'rgba(76,175,80,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -244,11 +347,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 3,
   },
-  nickname: {fontSize: 15, fontWeight: '600', color: '#222'},
-  time: {fontSize: 12, color: '#aaa'},
-  lastMsg: {fontSize: 14, color: '#777'},
-  separator: {height: 1, backgroundColor: '#f0f0f0', marginLeft: 82},
+  nickname: {fontSize: 15, fontWeight: '600', color: '#fff'},
+  time: {fontSize: 12, color: 'rgba(255,255,255,0.35)'},
+  lastMsg: {fontSize: 14, color: 'rgba(255,255,255,0.5)'},
+  separator: {height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginLeft: 82},
   emptyIcon: {fontSize: 56, marginBottom: 12},
-  emptyText: {fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 6},
-  emptySub: {fontSize: 13, color: '#aaa'},
+  emptyText: {fontSize: 16, fontWeight: '600', color: '#fff', marginBottom: 6},
+  emptySub: {fontSize: 13, color: 'rgba(255,255,255,0.4)'},
+
+  // 플러팅 수신함
+  flirtSection: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+    paddingBottom: 12,
+    marginBottom: 4,
+  },
+  flirtTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ce93d8',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 10,
+  },
+  flirtScroll: {paddingLeft: 16},
+  flirtCard: {
+    width: 90,
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  flirtAvatar: {width: 60, height: 60, borderRadius: 30, borderWidth: 2, borderColor: '#ce93d8'},
+  flirtAvatarFallback: {
+    width: 60, height: 60, borderRadius: 30,
+    backgroundColor: 'rgba(156,39,176,0.2)', justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2, borderColor: '#ce93d8',
+  },
+  flirtName: {fontSize: 12, color: '#fff', marginTop: 6, fontWeight: '600', textAlign: 'center'},
+  flirtBadge: {
+    marginTop: 4,
+    backgroundColor: '#9c27b0',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  flirtBadgeText: {fontSize: 10, color: '#fff', fontWeight: '700'},
 });

@@ -22,11 +22,7 @@ import useMatchStore, {ProfileData} from '../../store/matchStore';
 const {width: SCREEN_WIDTH} = Dimensions.get('window');
 const CURRENT_YEAR = new Date().getFullYear();
 
-// Haversine 거리 계산 (km)
-function getDistanceKm(
-  lat1: number, lng1: number,
-  lat2: number, lng2: number,
-): number {
+function getDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLng = ((lng2 - lng1) * Math.PI) / 180;
@@ -38,12 +34,8 @@ function getDistanceKm(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// 위치를 ~100m 정밀도로 퍼지화
 function fuzzyLocation(lat: number, lng: number) {
-  return {
-    lat: Math.round(lat * 1000) / 1000,
-    lng: Math.round(lng * 1000) / 1000,
-  };
+  return {lat: Math.round(lat * 1000) / 1000, lng: Math.round(lng * 1000) / 1000};
 }
 
 interface NearbyUser extends ProfileData {
@@ -59,13 +51,10 @@ export default function MapScreen() {
   const [nearbyUsers, setNearbyUsers] = useState<NearbyUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [locationDenied, setLocationDenied] = useState(false);
-
-  // 선택된 유저 프로필 미니카드
   const [selectedUser, setSelectedUser] = useState<NearbyUser | null>(null);
-  const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [actionLoading, setActionLoading] = useState(false);
 
-  // 위치 권한 요청
   const requestPermission = async (): Promise<boolean> => {
     if (Platform.OS === 'android') {
       const result = await PermissionsAndroid.request(
@@ -79,20 +68,35 @@ export default function MapScreen() {
       );
       return result === PermissionsAndroid.RESULTS.GRANTED;
     }
-    return true; // iOS는 Geolocation.requestAuthorization()으로 처리
+    return true;
   };
 
-  // 주변 유저 로드
   const loadNearbyUsers = useCallback(
     async (myLat: number, myLng: number) => {
       if (!currentUid) {return;}
       try {
+        // 이미 매칭된 상대 uid 수집
+        const matchSnap = await firestore()
+          .collection('matches')
+          .where('user_ids', 'array-contains', currentUid)
+          .get();
+        const matchedUids = new Set<string>();
+        matchSnap?.docs.forEach(doc => {
+          if (doc.data().status !== 'active') {return;} // cancelled는 재탐색 허용
+          const ids: string[] = doc.data().user_ids ?? [];
+          ids.forEach(id => {if (id !== currentUid) {matchedUids.add(id);}});
+        });
+
+        const myProfile = await firestore().collection('profiles').doc(currentUid).get();
+        const myPreferredGender: string = myProfile.data()?.preferred_gender ?? 'any';
+
         const snap = await firestore().collection('profiles').limit(100).get();
         const maxDist = filter.maxDistance === 0 ? Infinity : filter.maxDistance;
-
         const users: NearbyUser[] = [];
         snap.docs.forEach(doc => {
           if (doc.id === currentUid) {return;}
+          if (matchedUids.has(doc.id)) {return;}
+          if (myPreferredGender !== 'any' && doc.data().gender !== myPreferredGender) {return;}
           const data = doc.data() as Omit<ProfileData, 'uid'>;
           const loc = data.location_fuzzy as {lat: number; lng: number} | null;
           if (!loc) {return;}
@@ -100,71 +104,106 @@ export default function MapScreen() {
           if (dist > maxDist) {return;}
           users.push({uid: doc.id, ...data, distanceKm: dist});
         });
-
         users.sort((a, b) => a.distanceKm - b.distanceKm);
         setNearbyUsers(users);
-      } catch {
-        // 조용히 처리
-      }
+      } catch {}
     },
     [currentUid, filter.maxDistance],
   );
 
-  // 위치 취득 + Firestore 업데이트
   useEffect(() => {
     let watchId: number;
-
     const init = async () => {
       const granted = await requestPermission();
-      if (!granted) {
-        setLocationDenied(true);
-        setLoading(false);
-        return;
-      }
+      if (!granted) {setLocationDenied(true); setLoading(false); return;}
 
       watchId = Geolocation.watchPosition(
         pos => {
           const {latitude: lat, longitude: lng} = pos.coords;
           setMyLocation({lat, lng});
           setLoading(false);
-
-          // Firestore에 위치 업데이트 (정확 위치 + 퍼지 위치)
           if (currentUid) {
             const fuzzy = fuzzyLocation(lat, lng);
-            firestore()
-              .collection('profiles')
-              .doc(currentUid)
-              .update({
-                location: {lat, lng},
-                location_fuzzy: fuzzy,
-              })
+            firestore().collection('profiles').doc(currentUid)
+              .update({location: {lat, lng}, location_fuzzy: fuzzy})
               .catch(() => {});
-
-            // 주변 유저 로드
             loadNearbyUsers(fuzzy.lat, fuzzy.lng);
           }
         },
-        err => {
-          console.warn('Location error:', err);
-          setLoading(false);
-        },
+        err => {console.warn('Location error:', err); setLoading(false);},
         {enableHighAccuracy: true, distanceFilter: 50, interval: 30000},
       );
     };
-
     init();
-    return () => {
-      if (watchId != null) {Geolocation.clearWatch(watchId);}
-    };
+    return () => {if (watchId != null) {Geolocation.clearWatch(watchId);}};
   }, [currentUid, loadNearbyUsers]);
 
-  const handleMarkerPress = (user: NearbyUser) => {
-    setSelectedUser(user);
-    setPhotoIndex(0);
+  // 좋아요 / 슈퍼라이크 공통 저장
+  const saveSwipe = async (toUid: string, type: 'like' | 'super') => {
+    if (!currentUid) {return;}
+    try {
+      await firestore().collection('swipes').add({
+        from_uid: currentUid,
+        to_uid: toUid,
+        type,
+        created_at: firestore.FieldValue.serverTimestamp(),
+      });
+      // 상호 매칭 확인
+      const mutualSnap = await firestore()
+        .collection('swipes')
+        .where('from_uid', '==', toUid)
+        .where('to_uid', '==', currentUid)
+        .get();
+      const hasMutual =
+        mutualSnap?.docs.some(d => ['like', 'super'].includes(d.data().type)) ?? false;
+      if (hasMutual) {
+        await firestore().collection('matches').add({
+          user_ids: [currentUid, toUid],
+          status: 'active',
+          meeting_plan: null,
+          safety_checked: false,
+          created_at: firestore.FieldValue.serverTimestamp(),
+        });
+        Alert.alert('🎉 매칭 성립!', `${selectedUser?.nickname}님과 매칭됐어요!`);
+      }
+    } catch {}
   };
 
-  const handleOpenProfile = () => {
-    setProfileModalVisible(true);
+  const deductCoin = async (): Promise<boolean> => {
+    if (!currentUid) {return false;}
+    try {
+      let success = false;
+      await firestore().runTransaction(async tx => {
+        const doc = await tx.get(firestore().collection('users').doc(currentUid));
+        const balance: number = doc.data()?.coin_balance ?? 0;
+        if (balance < 1) {return;}
+        tx.update(firestore().collection('users').doc(currentUid), {coin_balance: balance - 1});
+        success = true;
+      });
+      return success;
+    } catch {return false;}
+  };
+
+  const handleLike = async () => {
+    if (!selectedUser) {return;}
+    setActionLoading(true);
+    await saveSwipe(selectedUser.uid, 'like');
+    setActionLoading(false);
+    setSelectedUser(null);
+  };
+
+  const handleSuperLike = async () => {
+    if (!selectedUser) {return;}
+    setActionLoading(true);
+    const ok = await deductCoin();
+    if (!ok) {
+      Alert.alert('코인 부족', '슈퍼라이크에는 코인 1개가 필요해요.');
+      setActionLoading(false);
+      return;
+    }
+    await saveSwipe(selectedUser.uid, 'super');
+    setActionLoading(false);
+    setSelectedUser(null);
   };
 
   const distanceLabel = (km: number) =>
@@ -190,15 +229,10 @@ export default function MapScreen() {
   }
 
   const initialRegion: Region | undefined = myLocation
-    ? {
-        latitude: myLocation.lat,
-        longitude: myLocation.lng,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      }
+    ? {latitude: myLocation.lat, longitude: myLocation.lng, latitudeDelta: 0.05, longitudeDelta: 0.05}
     : undefined;
 
-  const age = selectedUser
+  const selAge = selectedUser
     ? CURRENT_YEAR - (selectedUser.birth_year ?? 0) + 1
     : null;
 
@@ -209,26 +243,41 @@ export default function MapScreen() {
         style={styles.map}
         provider={PROVIDER_GOOGLE}
         initialRegion={initialRegion}
-        showsUserLocation
-        showsMyLocationButton
         onPress={() => setSelectedUser(null)}>
-        {/* 주변 유저 마커 */}
+        {/* 내 위치 마커 (showsUserLocation 대신 — New Architecture 호환) */}
+        {myLocation && (
+          <Marker
+            coordinate={{latitude: myLocation.lat, longitude: myLocation.lng}}
+            anchor={{x: 0.5, y: 0.5}}
+            tracksViewChanges={false}>
+            <View style={styles.myLocationOuter}>
+              <View style={styles.myLocationDot} />
+            </View>
+          </Marker>
+        )}
         {nearbyUsers.map(user => {
           const loc = user.location_fuzzy as {lat: number; lng: number};
           return (
             <Marker
               key={user.uid}
               coordinate={{latitude: loc.lat, longitude: loc.lng}}
-              onPress={() => handleMarkerPress(user)}>
-              <View style={styles.markerWrap}>
+              tracksViewChanges={false}
+              onPress={e => {e.stopPropagation(); setSelectedUser(user); setPhotoIndex(0);}}>
+              {/* 원형 마커 */}
+              <View style={styles.markerOuter}>
                 {user.photos?.[0] ? (
-                  <Image source={{uri: user.photos[0]}} style={styles.markerAvatar} />
+                  <Image
+                    source={{uri: user.photos[0]}}
+                    style={styles.markerImg}
+                  />
                 ) : (
-                  <View style={styles.markerAvatarPlaceholder}>
-                    <Text style={{fontSize: 14}}>🌱</Text>
+                  <View style={styles.markerFallback}>
+                    <Text style={{fontSize: 18}}>🌱</Text>
                   </View>
                 )}
               </View>
+              {/* 말풍선 꼬리 */}
+              <View style={styles.markerTail} />
             </Marker>
           );
         })}
@@ -242,56 +291,24 @@ export default function MapScreen() {
         </Text>
       </View>
 
-      {/* 선택된 유저 미니카드 */}
-      {selectedUser && (
-        <TouchableOpacity
-          style={styles.miniCard}
-          activeOpacity={0.95}
-          onPress={handleOpenProfile}>
-          {selectedUser.photos?.[0] ? (
-            <Image source={{uri: selectedUser.photos[0]}} style={styles.miniPhoto} />
-          ) : (
-            <View style={[styles.miniPhoto, styles.miniPhotoPlaceholder]}>
-              <Text style={{fontSize: 24}}>🌱</Text>
-            </View>
-          )}
-          <View style={styles.miniInfo}>
-            <Text style={styles.miniName}>
-              {selectedUser.nickname}  {age}세
-            </Text>
-            {(selectedUser.job || selectedUser.job_field) ? (
-              <Text style={styles.miniMeta}>
-                💼 {[selectedUser.job, selectedUser.job_field].filter(Boolean).join(' · ')}
-              </Text>
-            ) : null}
-            {selectedUser.activity_area ? (
-              <Text style={styles.miniMeta}>📍 {selectedUser.activity_area}</Text>
-            ) : null}
-            <Text style={styles.miniDist}>
-              🗺 {distanceLabel(selectedUser.distanceKm)} 거리
-            </Text>
-          </View>
-          <Text style={styles.miniArrow}>›</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* 프로필 상세 모달 */}
+      {/* 프로필 하단 모달 */}
       <Modal
-        visible={profileModalVisible}
+        visible={!!selectedUser}
         animationType="slide"
         transparent
-        onRequestClose={() => setProfileModalVisible(false)}>
+        onRequestClose={() => setSelectedUser(null)}>
         <TouchableOpacity
           style={styles.modalBackdrop}
           activeOpacity={1}
-          onPress={() => setProfileModalVisible(false)}>
+          onPress={() => setSelectedUser(null)}>
           <TouchableOpacity activeOpacity={1} style={styles.modalSheet}>
+
             {/* 사진 캐러셀 */}
             {selectedUser?.photos?.length ? (
-              <View style={styles.modalPhotoWrap}>
+              <View style={styles.photoWrap}>
                 <Image
                   source={{uri: selectedUser.photos[photoIndex]}}
-                  style={{width: SCREEN_WIDTH, height: 260}}
+                  style={{width: SCREEN_WIDTH, height: 240}}
                   resizeMode="cover"
                 />
                 {photoIndex > 0 && (
@@ -317,18 +334,21 @@ export default function MapScreen() {
                 )}
               </View>
             ) : (
-              <View style={styles.modalPhotoPlaceholder}>
+              <View style={styles.photoPlaceholder}>
                 <Text style={{fontSize: 48}}>🌱</Text>
               </View>
             )}
 
-            <ScrollView style={styles.modalInfo} showsVerticalScrollIndicator={false}>
-              <Text style={styles.modalName}>
-                {selectedUser?.nickname}  {age}세
-              </Text>
-              <Text style={styles.modalDist}>
-                🗺 {selectedUser ? distanceLabel(selectedUser.distanceKm) : ''} 거리
-              </Text>
+            {/* 프로필 정보 */}
+            <ScrollView style={styles.infoScroll} showsVerticalScrollIndicator={false}>
+              <View style={styles.nameRow}>
+                <Text style={styles.modalName}>
+                  {selectedUser?.nickname}  {selAge}세
+                </Text>
+                <Text style={styles.distLabel}>
+                  {selectedUser ? distanceLabel(selectedUser.distanceKm) : ''}
+                </Text>
+              </View>
               {(selectedUser?.job || selectedUser?.job_field) ? (
                 <Text style={styles.modalMeta}>
                   💼 {[selectedUser?.job, selectedUser?.job_field].filter(Boolean).join(' · ')}
@@ -342,11 +362,11 @@ export default function MapScreen() {
               ) : null}
               {selectedUser?.hobby_tags?.length ? (
                 <>
-                  <Text style={styles.modalSectionLabel}>취미</Text>
-                  <View style={styles.modalTags}>
+                  <Text style={styles.sectionLabel}>취미</Text>
+                  <View style={styles.tagRow}>
                     {selectedUser.hobby_tags.map(tag => (
-                      <View key={tag} style={styles.modalTag}>
-                        <Text style={styles.modalTagText}>{tag}</Text>
+                      <View key={tag} style={styles.tag}>
+                        <Text style={styles.tagText}>{tag}</Text>
                       </View>
                     ))}
                   </View>
@@ -354,18 +374,49 @@ export default function MapScreen() {
               ) : null}
               {selectedUser?.ideal_type_tags?.length ? (
                 <>
-                  <Text style={styles.modalSectionLabel}>이상형</Text>
-                  <View style={styles.modalTags}>
+                  <Text style={styles.sectionLabel}>이상형</Text>
+                  <View style={styles.tagRow}>
                     {selectedUser.ideal_type_tags.map(tag => (
-                      <View key={tag} style={[styles.modalTag, styles.modalTagIdeal]}>
-                        <Text style={[styles.modalTagText, {color: '#FF7043'}]}>{tag}</Text>
+                      <View key={tag} style={[styles.tag, styles.tagIdeal]}>
+                        <Text style={[styles.tagText, styles.tagIdealText]}>{tag}</Text>
                       </View>
                     ))}
                   </View>
                 </>
               ) : null}
-              <View style={{height: 32}} />
+              <View style={{height: 8}} />
             </ScrollView>
+
+            {/* 액션 버튼 */}
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={styles.superBtn}
+                onPress={handleSuperLike}
+                disabled={actionLoading}>
+                {actionLoading ? (
+                  <ActivityIndicator color="#29b6f6" />
+                ) : (
+                  <>
+                    <Text style={styles.superBtnIcon}>★</Text>
+                    <Text style={styles.superBtnLabel}>슈퍼라이크</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.likeBtn}
+                onPress={handleLike}
+                disabled={actionLoading}>
+                {actionLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Text style={styles.likeBtnIcon}>♥</Text>
+                    <Text style={styles.likeBtnLabel}>좋아요</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -383,22 +434,34 @@ const styles = StyleSheet.create({
   deniedSub: {fontSize: 14, color: '#aaa'},
 
   // 마커
-  markerWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 2.5,
+  markerOuter: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 3,
     borderColor: '#4CAF50',
-    overflow: 'hidden',
     backgroundColor: '#e8f5e9',
+    overflow: 'hidden',
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.25,
     shadowRadius: 4,
   },
-  markerAvatar: {width: 40, height: 40, borderRadius: 20},
-  markerAvatarPlaceholder: {width: 40, height: 40, justifyContent: 'center', alignItems: 'center'},
+  markerImg: {width: 46, height: 46, borderRadius: 23},
+  markerFallback: {width: 46, height: 46, justifyContent: 'center', alignItems: 'center'},
+  markerTail: {
+    width: 10,
+    height: 10,
+    borderLeftWidth: 5,
+    borderRightWidth: 5,
+    borderTopWidth: 8,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#4CAF50',
+    alignSelf: 'center',
+    marginTop: -1,
+  },
 
   // 유저 수 배지
   countBadge: {
@@ -412,31 +475,6 @@ const styles = StyleSheet.create({
   },
   countBadgeText: {color: '#fff', fontSize: 13, fontWeight: '600'},
 
-  // 미니카드
-  miniCard: {
-    position: 'absolute',
-    bottom: 24,
-    left: 16,
-    right: 16,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 3},
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    overflow: 'hidden',
-  },
-  miniPhoto: {width: 80, height: 80},
-  miniPhotoPlaceholder: {backgroundColor: '#e8f5e9', justifyContent: 'center', alignItems: 'center'},
-  miniInfo: {flex: 1, padding: 12, gap: 3},
-  miniName: {fontSize: 16, fontWeight: '700', color: '#111'},
-  miniMeta: {fontSize: 12, color: '#666'},
-  miniDist: {fontSize: 12, color: '#4CAF50', fontWeight: '600'},
-  miniArrow: {fontSize: 24, color: '#ccc', paddingRight: 12},
-
   // 모달
   modalBackdrop: {flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end'},
   modalSheet: {
@@ -444,36 +482,86 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     overflow: 'hidden',
-    height: '70%',
+    height: '75%',
   },
-  modalPhotoWrap: {height: 260, position: 'relative'},
-  modalPhotoPlaceholder: {height: 260, backgroundColor: '#e8f5e9', justifyContent: 'center', alignItems: 'center'},
-  modalInfo: {padding: 20},
-  modalName: {fontSize: 22, fontWeight: '700', color: '#111', marginBottom: 2},
-  modalDist: {fontSize: 13, color: '#4CAF50', fontWeight: '600', marginBottom: 6},
-  modalMeta: {fontSize: 13, color: '#666', marginBottom: 4},
-  modalBio: {fontSize: 14, color: '#444', marginTop: 10, lineHeight: 21},
-  modalSectionLabel: {fontSize: 13, fontWeight: '600', color: '#888', marginTop: 14, marginBottom: 6},
-  modalTags: {flexDirection: 'row', flexWrap: 'wrap', gap: 6},
-  modalTag: {
-    paddingHorizontal: 10, paddingVertical: 4,
-    backgroundColor: '#f1f8f1', borderRadius: 12,
-    borderWidth: 1, borderColor: '#c8e6c9',
-  },
-  modalTagText: {fontSize: 12, color: '#4CAF50'},
-  modalTagIdeal: {backgroundColor: '#fff3f0', borderColor: '#ffccbc'},
 
-  // 캐러셀
+  // 사진 캐러셀
+  photoWrap: {height: 240, position: 'relative'},
+  photoPlaceholder: {height: 240, backgroundColor: '#e8f5e9', justifyContent: 'center', alignItems: 'center'},
   photoNavBtn: {
     position: 'absolute', top: 0, bottom: 0, width: 48,
     justifyContent: 'center', alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.18)',
   },
-  photoNavText: {fontSize: 36, color: '#fff', fontWeight: '300', lineHeight: 42},
+  photoNavText: {fontSize: 36, color: '#fff', lineHeight: 42},
   dotRow: {
-    position: 'absolute', bottom: 10, left: 0, right: 0,
+    position: 'absolute', bottom: 8, left: 0, right: 0,
     flexDirection: 'row', justifyContent: 'center', gap: 6,
   },
   dot: {width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.5)'},
   dotActive: {backgroundColor: '#fff', width: 8, height: 8, borderRadius: 4},
+
+  // 프로필 정보
+  infoScroll: {paddingHorizontal: 20, paddingTop: 14, flex: 1},
+  nameRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4},
+  modalName: {fontSize: 20, fontWeight: '700', color: '#111'},
+  distLabel: {fontSize: 13, color: '#4CAF50', fontWeight: '600'},
+  modalMeta: {fontSize: 13, color: '#666', marginBottom: 3},
+  modalBio: {fontSize: 14, color: '#444', marginTop: 6, lineHeight: 20},
+  tagRow: {flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10},
+  tag: {
+    paddingHorizontal: 10, paddingVertical: 4,
+    backgroundColor: '#f1f8f1', borderRadius: 12,
+    borderWidth: 1, borderColor: '#c8e6c9',
+  },
+  tagText: {fontSize: 12, color: '#4CAF50'},
+  sectionLabel: {fontSize: 13, fontWeight: '600', color: '#888', marginTop: 12, marginBottom: 6},
+  tagIdeal: {backgroundColor: '#fff3f0', borderColor: '#ffccbc'},
+  tagIdealText: {fontSize: 12, color: '#FF7043'},
+
+  // 액션 버튼
+  actionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 16,
+    paddingBottom: 24,
+  },
+  superBtn: {
+    flex: 1,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: '#29b6f6',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+  },
+  superBtnIcon: {fontSize: 20, color: '#29b6f6'},
+  superBtnLabel: {fontSize: 14, fontWeight: '600', color: '#29b6f6'},
+  likeBtn: {
+    flex: 2,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#4CAF50',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+  },
+  likeBtnIcon: {fontSize: 20, color: '#fff'},
+  likeBtnLabel: {fontSize: 14, fontWeight: '600', color: '#fff'},
+
+  // 내 위치 마커
+  myLocationOuter: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: 'rgba(66,133,244,0.2)',
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(66,133,244,0.4)',
+  },
+  myLocationDot: {
+    width: 12, height: 12, borderRadius: 6,
+    backgroundColor: '#4285F4',
+    borderWidth: 2, borderColor: '#fff',
+  },
 });
