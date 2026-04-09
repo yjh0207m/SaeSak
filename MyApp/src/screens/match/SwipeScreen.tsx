@@ -17,6 +17,7 @@ import SwipeCard from '../../components/SwipeCard';
 import useMatchStore, {FilterSettings, ProfileData} from '../../store/matchStore';
 import {RootStackParamList} from '../../navigation/RootNavigator';
 import {useSubscription} from '../../hooks/useSubscription';
+import {useTheme} from '../../context/ThemeContext';
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -33,6 +34,7 @@ function applyFilter(profiles: ProfileData[], filter: FilterSettings): ProfileDa
 }
 
 export default function SwipeScreen() {
+  const {colors} = useTheme();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const swiperRef = useRef<any>(null);
   const [profiles, setProfiles] = useState<ProfileData[]>([]);
@@ -319,9 +321,9 @@ export default function SwipeScreen() {
   const isEmpty = !loading && (noMoreCards || profiles.length === 0);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, {backgroundColor: colors.bg}]}>
       {/* 헤더 */}
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, {backgroundColor: colors.bg}]}>
         <Text style={styles.header}>🌱 새싹</Text>
         <View style={styles.headerRight}>
           <TouchableOpacity
@@ -330,9 +332,9 @@ export default function SwipeScreen() {
             <Text style={styles.toggleBtnText}>{showButtons ? '👁' : '👁‍🗨'}</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterBtn, isFilterActive && styles.filterBtnActive]}
+            style={[styles.filterBtn, {borderColor: colors.border}, isFilterActive && {borderColor: colors.primary, backgroundColor: colors.primaryMuted}]}
             onPress={() => navigation.navigate('Filter')}>
-            <Text style={[styles.filterBtnText, isFilterActive && styles.filterBtnTextActive]}>
+            <Text style={[styles.filterBtnText, {color: colors.textMuted}, isFilterActive && {color: colors.primary, fontWeight: '600'}]}>
               {isFilterActive ? '필터 ●' : '필터'}
             </Text>
           </TouchableOpacity>
@@ -353,10 +355,10 @@ export default function SwipeScreen() {
           ) : isEmpty ? (
             <View style={styles.emptyInner}>
               <Text style={styles.emptyIcon}>🌱</Text>
-              <Text style={styles.emptyTitle}>
+              <Text style={[styles.emptyTitle, {color: colors.textPrimary}]}>
                 {isFilterActive ? '필터에 맞는 새싹이 없어요' : '주변 새싹이 없어요'}
               </Text>
-              <Text style={styles.emptySub}>
+              <Text style={[styles.emptySub, {color: colors.textMuted}]}>
                 {isFilterActive ? '필터를 조정해보세요' : '잠시 후 다시 확인해보세요'}
               </Text>
               <View style={styles.emptyButtons}>
@@ -401,42 +403,42 @@ export default function SwipeScreen() {
         {showButtons && <View style={styles.btnOverlay} pointerEvents="box-none">
           {/* PASS — 상단 중앙 */}
           <View style={styles.btnTop} pointerEvents="box-none">
-            <TouchableOpacity style={styles.passBtn} onPress={pressPass}>
+            <TouchableOpacity style={[styles.passBtn, {backgroundColor: colors.card}]} onPress={pressPass}>
               <Text style={styles.passBtnText}>✕</Text>
             </TouchableOpacity>
           </View>
           {/* SUPER — 좌측 중앙 */}
           <View style={styles.btnLeft} pointerEvents="box-none">
-            <TouchableOpacity style={styles.superBtn} onPress={pressSuperLike}>
+            <TouchableOpacity style={[styles.superBtn, {backgroundColor: colors.card}]} onPress={pressSuperLike}>
               <Text style={styles.superBtnText}>★</Text>
             </TouchableOpacity>
           </View>
           {/* LIKE — 우측 중앙 */}
           <View style={styles.btnRight} pointerEvents="box-none">
-            <TouchableOpacity style={styles.likeBtn} onPress={pressLike}>
+            <TouchableOpacity style={[styles.likeBtn, {backgroundColor: colors.card}]} onPress={pressLike}>
               <Text style={styles.likeBtnText}>♥</Text>
             </TouchableOpacity>
           </View>
           {/* UNDO + 플러팅 — 하단 */}
           <View style={styles.btnBottom} pointerEvents="box-none">
             <View style={styles.btnBottomRow}>
-              <TouchableOpacity style={styles.undoBtn} onPress={handleUndo}>
+              <TouchableOpacity style={[styles.undoBtn, {backgroundColor: colors.card}]} onPress={handleUndo}>
                 <Text style={styles.undoBtnText}>↩</Text>
               </TouchableOpacity>
               {tier === 'sprout_plus_plus' ? (
-                <TouchableOpacity style={styles.flirtBtn} onPress={handleFlirt}>
+                <TouchableOpacity style={[styles.flirtBtn, {backgroundColor: colors.card}]} onPress={handleFlirt}>
                   <Text style={styles.flirtBtnText}>💌</Text>
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity
-                  style={styles.flirtBtnLocked}
+                  style={[styles.flirtBtnLocked, {backgroundColor: colors.card}]}
                   onPress={() => navigation.navigate('Premium')}>
                   <Text style={styles.flirtBtnText}>💌</Text>
                   <Text style={styles.flirtLockText}>🔒</Text>
                 </TouchableOpacity>
               )}
             </View>
-            <Text style={styles.actionHint}>↩되돌리기 · 💌플러팅(새싹++)</Text>
+            <Text style={[styles.actionHint, {color: colors.textMuted}]}>↩되돌리기 · 💌플러팅(새싹++)</Text>
           </View>
         </View>}
       </View>
@@ -455,7 +457,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 8,
   },
-  header: {fontSize: 22, fontWeight: '700', color: '#4CAF50', backgroundColor: '#151a28'},
+  header: {fontSize: 22, fontWeight: '700', color: '#4CAF50'},
   headerRight: {flexDirection: 'row', alignItems: 'center', gap: 8},
   toggleBtn: {padding: 6},
   toggleBtnText: {fontSize: 18},
@@ -518,11 +520,11 @@ const styles = StyleSheet.create({
   },
   actionHint: {fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'center'},
   undoBtn: {width: 56, height: 56, borderRadius: 22, backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#ffd740', justifyContent: 'center', alignItems: 'center', elevation: 2},
-  undoBtnText: {fontSize: 22, color: '#ffd740'},
+  undoBtnText: {fontSize: 34, color: '#ffd740', alignContent: 'center', marginTop: -7,},
   passBtn: {width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff', borderWidth: 2, borderColor: '#ff4458', justifyContent: 'center', alignItems: 'center', elevation: 3},
   passBtnText: {fontSize: 22, color: '#ff4458'},
   superBtn: {width: 56, height: 56, borderRadius: 32, backgroundColor: '#fff', borderWidth: 2, borderColor: '#29b6f6', justifyContent: 'center', alignItems: 'center', elevation: 3},
-  superBtnText: {fontSize: 22, color: '#29b6f6'},
+  superBtnText: {fontSize: 29, color: '#29b6f6',alignContent: 'center', marginTop: -5,},
   likeBtn: {width: 56, height: 56, borderRadius: 32, backgroundColor: '#fff', borderWidth: 2, borderColor: '#4CAF50', justifyContent: 'center', alignItems: 'center', elevation: 3},
   likeBtnText: {fontSize: 22, color: '#4CAF50'},
   emptyInner: {flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24},

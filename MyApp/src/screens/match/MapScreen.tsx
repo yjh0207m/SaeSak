@@ -18,6 +18,7 @@ import Geolocation from 'react-native-geolocation-service';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import useMatchStore, {ProfileData} from '../../store/matchStore';
+import {useTheme} from '../../context/ThemeContext';
 
 const {width: SCREEN_WIDTH} = Dimensions.get('window');
 const CURRENT_YEAR = new Date().getFullYear();
@@ -43,6 +44,7 @@ interface NearbyUser extends ProfileData {
 }
 
 export default function MapScreen() {
+  const {colors} = useTheme();
   const mapRef = useRef<MapView>(null);
   const currentUid = auth().currentUser?.uid;
   const {filter} = useMatchStore();
@@ -211,19 +213,19 @@ export default function MapScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, {backgroundColor: colors.bg}]}>
         <ActivityIndicator size="large" color="#4CAF50" />
-        <Text style={styles.loadingText}>위치를 가져오는 중...</Text>
+        <Text style={[styles.loadingText, {color: colors.textMuted}]}>위치를 가져오는 중...</Text>
       </View>
     );
   }
 
   if (locationDenied) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, {backgroundColor: colors.bg}]}>
         <Text style={styles.deniedIcon}>📍</Text>
-        <Text style={styles.deniedTitle}>위치 권한이 필요해요</Text>
-        <Text style={styles.deniedSub}>설정에서 위치 권한을 허용해주세요.</Text>
+        <Text style={[styles.deniedTitle, {color: colors.textPrimary}]}>위치 권한이 필요해요</Text>
+        <Text style={[styles.deniedSub, {color: colors.textMuted}]}>설정에서 위치 권한을 허용해주세요.</Text>
       </View>
     );
   }
@@ -301,7 +303,7 @@ export default function MapScreen() {
           style={styles.modalBackdrop}
           activeOpacity={1}
           onPress={() => setSelectedUser(null)}>
-          <TouchableOpacity activeOpacity={1} style={styles.modalSheet}>
+          <TouchableOpacity activeOpacity={1} style={[styles.modalSheet, {backgroundColor: colors.card}]}>
 
             {/* 사진 캐러셀 */}
             {selectedUser?.photos?.length ? (
@@ -342,7 +344,7 @@ export default function MapScreen() {
             {/* 프로필 정보 */}
             <ScrollView style={styles.infoScroll} showsVerticalScrollIndicator={false}>
               <View style={styles.nameRow}>
-                <Text style={styles.modalName}>
+                <Text style={[styles.modalName, {color: colors.textPrimary}]}>
                   {selectedUser?.nickname}  {selAge}세
                 </Text>
                 <Text style={styles.distLabel}>
@@ -350,23 +352,23 @@ export default function MapScreen() {
                 </Text>
               </View>
               {(selectedUser?.job || selectedUser?.job_field) ? (
-                <Text style={styles.modalMeta}>
+                <Text style={[styles.modalMeta, {color: colors.textSecondary}]}>
                   💼 {[selectedUser?.job, selectedUser?.job_field].filter(Boolean).join(' · ')}
                 </Text>
               ) : null}
               {selectedUser?.activity_area ? (
-                <Text style={styles.modalMeta}>📍 {selectedUser.activity_area}</Text>
+                <Text style={[styles.modalMeta, {color: colors.textSecondary}]}>📍 {selectedUser.activity_area}</Text>
               ) : null}
               {selectedUser?.bio ? (
-                <Text style={styles.modalBio}>{selectedUser.bio}</Text>
+                <Text style={[styles.modalBio, {color: colors.textSecondary}]}>{selectedUser.bio}</Text>
               ) : null}
               {selectedUser?.hobby_tags?.length ? (
                 <>
-                  <Text style={styles.sectionLabel}>취미</Text>
+                  <Text style={[styles.sectionLabel, {color: colors.textMuted}]}>취미</Text>
                   <View style={styles.tagRow}>
                     {selectedUser.hobby_tags.map(tag => (
-                      <View key={tag} style={styles.tag}>
-                        <Text style={styles.tagText}>{tag}</Text>
+                      <View key={tag} style={[styles.tag, {backgroundColor: colors.tagBg, borderColor: colors.border}]}>
+                        <Text style={[styles.tagText, {color: colors.tagText}]}>{tag}</Text>
                       </View>
                     ))}
                   </View>
@@ -374,10 +376,10 @@ export default function MapScreen() {
               ) : null}
               {selectedUser?.ideal_type_tags?.length ? (
                 <>
-                  <Text style={styles.sectionLabel}>이상형</Text>
+                  <Text style={[styles.sectionLabel, {color: colors.textMuted}]}>이상형</Text>
                   <View style={styles.tagRow}>
                     {selectedUser.ideal_type_tags.map(tag => (
-                      <View key={tag} style={[styles.tag, styles.tagIdeal]}>
+                      <View key={tag} style={[styles.tag, {backgroundColor: 'rgba(255,112,67,0.18)', borderColor: 'rgba(255,112,67,0.4)'}]}>
                         <Text style={[styles.tagText, styles.tagIdealText]}>{tag}</Text>
                       </View>
                     ))}

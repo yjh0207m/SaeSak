@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
+import {useTheme} from '../../context/ThemeContext';
 
 interface CoinPackage {
   coins: number;
@@ -35,6 +36,7 @@ function formatWon(n: number) {
 }
 
 export default function CoinShopScreen() {
+  const {colors} = useTheme();
   const uid = auth().currentUser?.uid;
   const [balance, setBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState<number | null>(null); // 충전 중인 패키지 coins
@@ -81,7 +83,7 @@ export default function CoinShopScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.inner}>
+    <ScrollView style={[styles.container, {backgroundColor: colors.bg}]} contentContainerStyle={styles.inner}>
 
       {/* 현재 잔액 */}
       <View style={styles.balanceBox}>
@@ -100,11 +102,11 @@ export default function CoinShopScreen() {
       </View>
 
       {/* 패키지 목록 */}
-      <Text style={styles.sectionTitle}>충전 패키지</Text>
+      <Text style={[styles.sectionTitle, {color: colors.textMuted}]}>충전 패키지</Text>
       {PACKAGES.map(pkg => (
         <TouchableOpacity
           key={pkg.coins}
-          style={[styles.card, pkg.best && styles.cardBest]}
+          style={[styles.card, {backgroundColor: colors.card, borderColor: colors.border}, pkg.best && {borderColor: '#4CAF50'}]}
           activeOpacity={0.75}
           disabled={loading !== null}
           onPress={() => handleCharge(pkg)}>
@@ -116,8 +118,8 @@ export default function CoinShopScreen() {
           )}
 
           <View style={styles.cardLeft}>
-            <Text style={styles.cardCoins}>🪙 {pkg.coins}코인</Text>
-            <Text style={styles.cardPer}>
+            <Text style={[styles.cardCoins, {color: colors.textPrimary}]}>🪙 {pkg.coins}코인</Text>
+            <Text style={[styles.cardPer, {color: colors.textMuted}]}>
               개당 {formatWon(pricePerCoin(pkg))}
             </Text>
           </View>
@@ -128,7 +130,7 @@ export default function CoinShopScreen() {
                 <Text style={styles.discountText}>{pkg.discount}% 할인</Text>
               </View>
             )}
-            <Text style={[styles.cardPrice, pkg.best && styles.cardPriceBest]}>
+            <Text style={[styles.cardPrice, {color: colors.textPrimary}, pkg.best && styles.cardPriceBest]}>
               {formatWon(pkg.price)}
             </Text>
             {loading === pkg.coins ? (
@@ -141,15 +143,15 @@ export default function CoinShopScreen() {
       ))}
 
       {/* 안내 */}
-      <View style={styles.noticeBox}>
-        <Text style={styles.noticeTitle}>코인 안내</Text>
+      <View style={[styles.noticeBox, {backgroundColor: colors.card}]}>
+        <Text style={[styles.noticeTitle, {color: colors.textSecondary}]}>코인 안내</Text>
         {[
           '슈퍼라이크 1회에 코인 1개가 사용돼요.',
           '충전한 코인은 환불되지 않아요.',
           '코인 유효기간은 충전일로부터 1년이에요.',
           '실제 결제 기능은 추후 업데이트 예정이에요.',
         ].map((line, i) => (
-          <Text key={i} style={styles.noticeLine}>· {line}</Text>
+          <Text key={i} style={[styles.noticeLine, {color: colors.textMuted}]}>· {line}</Text>
         ))}
       </View>
 

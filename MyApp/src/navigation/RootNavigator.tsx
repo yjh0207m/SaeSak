@@ -11,6 +11,7 @@ import FilterScreen from '../screens/match/FilterScreen';
 import ProfileSetupScreen from '../screens/auth/ProfileSetupScreen';
 import CoinShopScreen from '../screens/pay/CoinShopScreen';
 import PremiumScreen from '../screens/pay/PremiumScreen';
+import {useTheme} from '../context/ThemeContext';
 
 // Metro 0.83 + @react-navigation/elements v2 에셋 버그 우회:
 // 기본 PNG 뒤로가기 버튼 대신 커스텀 컴포넌트 사용
@@ -38,6 +39,7 @@ export type RootStackParamList = {
 const Stack = createStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
+  const {colors} = useTheme();
   const [user, setUser] = useState<FirebaseAuthTypes.User | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [hasProfile, setHasProfile] = useState(false);
@@ -92,6 +94,9 @@ export default function RootNavigator() {
       <Stack.Navigator
         screenOptions={({navigation}) => ({
           headerShown: false,
+          headerStyle: {backgroundColor: colors.card},
+          headerTintColor: colors.primary,
+          headerTitleStyle: {color: colors.textPrimary},
           headerLeft: ({canGoBack}) =>
             canGoBack ? <BackButton onPress={() => navigation.goBack()} /> : null,
         })}>

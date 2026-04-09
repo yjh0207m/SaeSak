@@ -11,6 +11,7 @@ import {
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import {useSubscription} from '../../hooks/useSubscription';
+import {useTheme} from '../../context/ThemeContext';
 
 interface TierConfig {
   id: 'sprout_plus' | 'sprout_plus_plus';
@@ -66,6 +67,7 @@ function formatWon(n: number) {
 }
 
 export default function PremiumScreen() {
+  const {colors} = useTheme();
   const uid = auth().currentUser?.uid;
   const {tier, expiresAt, loading} = useSubscription();
   const [balance, setBalance] = useState(0);
@@ -180,7 +182,7 @@ export default function PremiumScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, {backgroundColor: colors.bg}]}>
         <ActivityIndicator size="large" color="#4CAF50" />
       </View>
     );
@@ -189,23 +191,24 @@ export default function PremiumScreen() {
   const currentTierConfig = TIERS.find(t => t.id === tier);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.inner}>
+    <ScrollView style={[styles.container, {backgroundColor: colors.bg}]} contentContainerStyle={styles.inner}>
 
       {/* 현재 상태 카드 */}
       <View style={[
         styles.statusCard,
-        currentTierConfig ? {borderColor: currentTierConfig.color, backgroundColor: currentTierConfig.lightColor} : styles.statusCardFree,
+        {backgroundColor: colors.card, borderColor: colors.border},
+        currentTierConfig ? {borderColor: currentTierConfig.color, backgroundColor: currentTierConfig.lightColor} : null,
       ]}>
         <View style={styles.statusTop}>
           <View>
-            <Text style={styles.statusLabel}>현재 등급</Text>
-            <Text style={[styles.statusTier, currentTierConfig ? {color: currentTierConfig.color} : styles.freeTierText]}>
+            <Text style={[styles.statusLabel, {color: colors.textMuted}]}>현재 등급</Text>
+            <Text style={[styles.statusTier, currentTierConfig ? {color: currentTierConfig.color} : {color: colors.textMuted}]}>
               {currentTierConfig ? currentTierConfig.name : '무료'}
             </Text>
           </View>
           <View style={styles.coinBox}>
-            <Text style={styles.coinLabel}>보유 코인</Text>
-            <Text style={styles.coinValue}>🪙 {balance}</Text>
+            <Text style={[styles.coinLabel, {color: colors.textMuted}]}>보유 코인</Text>
+            <Text style={[styles.coinValue, {color: colors.textPrimary}]}>🪙 {balance}</Text>
           </View>
         </View>
         {tier !== 'free' && expiresAt && (
@@ -233,7 +236,7 @@ export default function PremiumScreen() {
       </View>
 
       {/* 구독 플랜 */}
-      <Text style={styles.sectionTitle}>구독 플랜</Text>
+      <Text style={[styles.sectionTitle, {color: colors.textMuted}]}>구독 플랜</Text>
 
       {TIERS.map(t => {
         const isCurrent = tier === t.id;
@@ -243,6 +246,7 @@ export default function PremiumScreen() {
             key={t.id}
             style={[
               styles.tierCard,
+              {backgroundColor: colors.card, borderColor: colors.border},
               isCurrent && {borderColor: t.color, borderWidth: 2},
             ]}>
             {isCurrent && (
@@ -253,8 +257,8 @@ export default function PremiumScreen() {
             <View style={styles.tierHeader}>
               <Text style={[styles.tierName, {color: t.color}]}>{t.name}</Text>
               <View>
-                <Text style={styles.tierPrice}>{formatWon(t.price)}/월</Text>
-                <Text style={styles.tierCoins}>매주 🪙{t.weeklyCoins} 지급</Text>
+                <Text style={[styles.tierPrice, {color: colors.textPrimary}]}>{formatWon(t.price)}/월</Text>
+                <Text style={[styles.tierCoins, {color: colors.textMuted}]}>매주 🪙{t.weeklyCoins} 지급</Text>
               </View>
             </View>
 
@@ -262,7 +266,7 @@ export default function PremiumScreen() {
               {t.benefits.map((b, i) => (
                 <View key={i} style={styles.benefitRow}>
                   <Text style={[styles.benefitDot, {color: t.color}]}>✓</Text>
-                  <Text style={styles.benefitText}>{b}</Text>
+                  <Text style={[styles.benefitText, {color: colors.textSecondary}]}>{b}</Text>
                 </View>
               ))}
             </View>
@@ -284,8 +288,8 @@ export default function PremiumScreen() {
               </TouchableOpacity>
             )}
             {isLower && (
-              <View style={styles.downgradeDim}>
-                <Text style={styles.downgradeText}>현재 등급보다 낮은 플랜이에요</Text>
+              <View style={[styles.downgradeDim, {backgroundColor: colors.bgSecondary}]}>
+                <Text style={[styles.downgradeText, {color: colors.textMuted}]}>현재 등급보다 낮은 플랜이에요</Text>
               </View>
             )}
           </View>
@@ -293,15 +297,15 @@ export default function PremiumScreen() {
       })}
 
       {/* 안내 */}
-      <View style={styles.noticeBox}>
-        <Text style={styles.noticeTitle}>구독 안내</Text>
+      <View style={[styles.noticeBox, {backgroundColor: colors.card}]}>
+        <Text style={[styles.noticeTitle, {color: colors.textSecondary}]}>구독 안내</Text>
         {[
           '매월 자동 결제되며 언제든 해지 가능해요.',
           '주간 코인은 구독 중일 때 앱 접속 시 지급돼요.',
           '해지 후에도 만료일까지 혜택이 유지돼요.',
           '실제 결제 기능은 추후 업데이트 예정이에요.',
         ].map((line, i) => (
-          <Text key={i} style={styles.noticeLine}>· {line}</Text>
+          <Text key={i} style={[styles.noticeLine, {color: colors.textMuted}]}>· {line}</Text>
         ))}
       </View>
     </ScrollView>

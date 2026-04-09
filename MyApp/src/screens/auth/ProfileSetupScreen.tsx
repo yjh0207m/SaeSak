@@ -16,8 +16,10 @@ import firestore from '@react-native-firebase/firestore';
 import storage from '@react-native-firebase/storage';
 import {launchImageLibrary} from 'react-native-image-picker';
 import {HOBBY_TAGS, GENDERS, JOB_FIELDS, IDEAL_TYPE_TAGS, PREFERRED_GENDERS} from '../../utils/constants';
+import {useTheme} from '../../context/ThemeContext';
 
 export default function ProfileSetupScreen() {
+  const {colors} = useTheme();
   const navigation = useNavigation();
 
   const [nickname, setNickname] = useState('');
@@ -166,18 +168,18 @@ export default function ProfileSetupScreen() {
 
   if (loadingProfile) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, {backgroundColor: colors.bg}]}>
         <ActivityIndicator size="large" color="#4CAF50" />
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.inner}>
+    <ScrollView style={[styles.container, {backgroundColor: colors.bg}]} contentContainerStyle={styles.inner}>
       {/* 완성도 바 */}
       <View style={styles.progressContainer}>
-        <Text style={styles.progressLabel}>프로필 완성도 {completeness}%</Text>
-        <View style={styles.progressBar}>
+        <Text style={[styles.progressLabel, {color: colors.textSecondary}]}>프로필 완성도 {completeness}%</Text>
+        <View style={[styles.progressBar, {backgroundColor: colors.border}]}>
           <View style={[styles.progressFill, {width: `${completeness}%`}]} />
         </View>
         {completeness >= 80 && (
@@ -186,7 +188,7 @@ export default function ProfileSetupScreen() {
       </View>
 
       {/* 사진 */}
-      <Text style={styles.sectionTitle}>사진 ({photos.length}/3)</Text>
+      <Text style={[styles.sectionTitle, {color: colors.textPrimary}]}>사진 ({photos.length}/3)</Text>
       <View style={styles.photoRow}>
         {photos.map((uri, i) => (
           <TouchableOpacity key={i} onPress={() => handleRemovePhoto(i)}>
@@ -203,35 +205,35 @@ export default function ProfileSetupScreen() {
         ))}
         {photos.length < 3 && (
           <TouchableOpacity
-            style={styles.addPhoto}
+            style={[styles.addPhoto, {borderColor: colors.border}]}
             onPress={handleAddPhoto}
             disabled={uploading}>
             {uploading ? (
               <ActivityIndicator color="#4CAF50" />
             ) : (
-              <Text style={styles.addPhotoText}>+</Text>
+              <Text style={[styles.addPhotoText, {color: colors.textMuted}]}>+</Text>
             )}
           </TouchableOpacity>
         )}
       </View>
 
       {/* 닉네임 */}
-      <Text style={styles.sectionTitle}>닉네임 *</Text>
+      <Text style={[styles.sectionTitle, {color: colors.textPrimary}]}>닉네임 *</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, {borderColor: colors.border, color: colors.textPrimary, backgroundColor: colors.bgSecondary}]}
         placeholder="닉네임을 입력하세요"
-        placeholderTextColor="#aaa"
+        placeholderTextColor={colors.textMuted}
         value={nickname}
         onChangeText={setNickname}
         maxLength={20}
       />
 
       {/* 출생연도 */}
-      <Text style={styles.sectionTitle}>출생연도 *</Text>
+      <Text style={[styles.sectionTitle, {color: colors.textPrimary}]}>출생연도 *</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, {borderColor: colors.border, color: colors.textPrimary, backgroundColor: colors.bgSecondary}]}
         placeholder="예: 1995"
-        placeholderTextColor="#aaa"
+        placeholderTextColor={colors.textMuted}
         keyboardType="number-pad"
         value={birthYear}
         onChangeText={setBirthYear}
@@ -239,16 +241,17 @@ export default function ProfileSetupScreen() {
       />
 
       {/* 성별 */}
-      <Text style={styles.sectionTitle}>성별 *</Text>
+      <Text style={[styles.sectionTitle, {color: colors.textPrimary}]}>성별 *</Text>
       <View style={styles.genderRow}>
         {GENDERS.map(g => (
           <TouchableOpacity
             key={g.value}
-            style={[styles.genderBtn, gender === g.value && styles.genderBtnActive]}
+            style={[styles.genderBtn, {borderColor: colors.border}, gender === g.value && styles.genderBtnActive]}
             onPress={() => setGender(g.value)}>
             <Text
               style={[
                 styles.genderBtnText,
+                {color: colors.textSecondary},
                 gender === g.value && styles.genderBtnTextActive,
               ]}>
               {g.label}
@@ -258,14 +261,14 @@ export default function ProfileSetupScreen() {
       </View>
 
       {/* 매칭 상대 성별 */}
-      <Text style={styles.sectionTitle}>매칭 상대 성별</Text>
+      <Text style={[styles.sectionTitle, {color: colors.textPrimary}]}>매칭 상대 성별</Text>
       <View style={styles.genderRow}>
         {PREFERRED_GENDERS.map(g => (
           <TouchableOpacity
             key={g.value}
-            style={[styles.genderBtn, preferredGender === g.value && styles.genderBtnActive]}
+            style={[styles.genderBtn, {borderColor: colors.border}, preferredGender === g.value && styles.genderBtnActive]}
             onPress={() => setPreferredGender(g.value)}>
-            <Text style={[styles.genderBtnText, preferredGender === g.value && styles.genderBtnTextActive]}>
+            <Text style={[styles.genderBtnText, {color: colors.textSecondary}, preferredGender === g.value && styles.genderBtnTextActive]}>
               {g.label}
             </Text>
           </TouchableOpacity>
@@ -273,11 +276,11 @@ export default function ProfileSetupScreen() {
       </View>
 
       {/* 자기소개 */}
-      <Text style={styles.sectionTitle}>자기소개 ({bio.length}/200)</Text>
+      <Text style={[styles.sectionTitle, {color: colors.textPrimary}]}>자기소개 ({bio.length}/200)</Text>
       <TextInput
-        style={[styles.input, styles.textArea]}
+        style={[styles.input, styles.textArea, {borderColor: colors.border, color: colors.textPrimary, backgroundColor: colors.bgSecondary}]}
         placeholder="자신을 소개해주세요"
-        placeholderTextColor="#aaa"
+        placeholderTextColor={colors.textMuted}
         multiline
         maxLength={200}
         value={bio}
@@ -285,35 +288,35 @@ export default function ProfileSetupScreen() {
       />
 
       {/* 활동 지역 */}
-      <Text style={styles.sectionTitle}>활동 지역</Text>
+      <Text style={[styles.sectionTitle, {color: colors.textPrimary}]}>활동 지역</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, {borderColor: colors.border, color: colors.textPrimary, backgroundColor: colors.bgSecondary}]}
         placeholder="예: 서울 강남구"
-        placeholderTextColor="#aaa"
+        placeholderTextColor={colors.textMuted}
         value={activityArea}
         onChangeText={setActivityArea}
       />
 
       {/* 직업 */}
-      <Text style={styles.sectionTitle}>직업</Text>
+      <Text style={[styles.sectionTitle, {color: colors.textPrimary}]}>직업</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, {borderColor: colors.border, color: colors.textPrimary, backgroundColor: colors.bgSecondary}]}
         placeholder="예: 소프트웨어 엔지니어"
-        placeholderTextColor="#aaa"
+        placeholderTextColor={colors.textMuted}
         value={job}
         onChangeText={setJob}
         maxLength={40}
       />
 
       {/* 직업 분야 */}
-      <Text style={styles.sectionTitle}>직업 분야</Text>
+      <Text style={[styles.sectionTitle, {color: colors.textPrimary}]}>직업 분야</Text>
       <View style={styles.tagGrid}>
         {JOB_FIELDS.map(field => (
           <TouchableOpacity
             key={field}
-            style={[styles.tag, jobField === field && styles.tagActive]}
+            style={[styles.tag, {borderColor: colors.border}, jobField === field && styles.tagActive]}
             onPress={() => setJobField(prev => (prev === field ? '' : field))}>
-            <Text style={[styles.tagText, jobField === field && styles.tagTextActive]}>
+            <Text style={[styles.tagText, {color: colors.textSecondary}, jobField === field && styles.tagTextActive]}>
               {field}
             </Text>
           </TouchableOpacity>
@@ -321,16 +324,17 @@ export default function ProfileSetupScreen() {
       </View>
 
       {/* 취미 태그 */}
-      <Text style={styles.sectionTitle}>취미 태그 ({selectedTags.length}/5)</Text>
+      <Text style={[styles.sectionTitle, {color: colors.textPrimary}]}>취미 태그 ({selectedTags.length}/5)</Text>
       <View style={styles.tagGrid}>
         {HOBBY_TAGS.map(tag => (
           <TouchableOpacity
             key={tag}
-            style={[styles.tag, selectedTags.includes(tag) && styles.tagActive]}
+            style={[styles.tag, {borderColor: colors.border}, selectedTags.includes(tag) && styles.tagActive]}
             onPress={() => toggleTag(tag)}>
             <Text
               style={[
                 styles.tagText,
+                {color: colors.textSecondary},
                 selectedTags.includes(tag) && styles.tagTextActive,
               ]}>
               {tag}
@@ -340,12 +344,12 @@ export default function ProfileSetupScreen() {
       </View>
 
       {/* 이상형 태그 */}
-      <Text style={styles.sectionTitle}>이상형 태그 ({idealTypeTags.length}/5)</Text>
+      <Text style={[styles.sectionTitle, {color: colors.textPrimary}]}>이상형 태그 ({idealTypeTags.length}/5)</Text>
       <View style={styles.tagGrid}>
         {IDEAL_TYPE_TAGS.map(tag => (
           <TouchableOpacity
             key={tag}
-            style={[styles.tag, idealTypeTags.includes(tag) && styles.tagIdeal]}
+            style={[styles.tag, {borderColor: colors.border}, idealTypeTags.includes(tag) && styles.tagIdeal]}
             onPress={() => {
               if (idealTypeTags.includes(tag)) {
                 setIdealTypeTags(prev => prev.filter(t => t !== tag));
@@ -357,7 +361,7 @@ export default function ProfileSetupScreen() {
                 setIdealTypeTags(prev => [...prev, tag]);
               }
             }}>
-            <Text style={[styles.tagText, idealTypeTags.includes(tag) && styles.tagTextActive]}>
+            <Text style={[styles.tagText, {color: colors.textSecondary}, idealTypeTags.includes(tag) && styles.tagTextActive]}>
               {tag}
             </Text>
           </TouchableOpacity>

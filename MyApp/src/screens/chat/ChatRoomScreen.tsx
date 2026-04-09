@@ -27,6 +27,7 @@ import {launchImageLibrary} from 'react-native-image-picker';
 import ChatBubble from '../../components/ChatBubble';
 import useChatStore from '../../store/chatStore';
 import {RootStackParamList} from '../../navigation/RootNavigator';
+import {useTheme} from '../../context/ThemeContext';
 
 interface ExclusivityDoc {
   id: string;
@@ -62,6 +63,7 @@ interface OtherProfile {
 }
 
 export default function ChatRoomScreen() {
+  const {colors} = useTheme();
   const route = useRoute<ChatRoomRouteProp>();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const {matchId, otherUserNickname, otherUserUid} = route.params;
@@ -515,7 +517,7 @@ export default function ChatRoomScreen() {
         style={styles.modalBackdrop}
         activeOpacity={1}
         onPress={() => setProfileModalVisible(false)}>
-        <TouchableOpacity activeOpacity={1} style={styles.modalSheet}>
+        <TouchableOpacity activeOpacity={1} style={[styles.modalSheet, {backgroundColor: colors.card}]}>
           {otherProfile?.photos?.length ? (
             <View style={styles.modalPhotoWrap}>
               <Image
@@ -553,27 +555,27 @@ export default function ChatRoomScreen() {
             </View>
           )}
           <ScrollView style={styles.modalInfo} showsVerticalScrollIndicator={false}>
-            <Text style={styles.modalName}>
+            <Text style={[styles.modalName, {color: colors.textPrimary}]}>
               {otherProfile?.nickname}{otherAge ? `  ${otherAge}세` : ''}
             </Text>
             {(otherProfile?.job || otherProfile?.job_field) ? (
-              <Text style={styles.modalMeta}>
+              <Text style={[styles.modalMeta, {color: colors.textMuted}]}>
                 💼 {[otherProfile.job, otherProfile.job_field].filter(Boolean).join(' · ')}
               </Text>
             ) : null}
             {otherProfile?.activity_area ? (
-              <Text style={styles.modalMeta}>📍 {otherProfile.activity_area}</Text>
+              <Text style={[styles.modalMeta, {color: colors.textMuted}]}>📍 {otherProfile.activity_area}</Text>
             ) : null}
             {otherProfile?.bio ? (
-              <Text style={styles.modalBio}>{otherProfile.bio}</Text>
+              <Text style={[styles.modalBio, {color: colors.textSecondary}]}>{otherProfile.bio}</Text>
             ) : null}
             {otherProfile?.hobby_tags?.length ? (
               <>
-                <Text style={styles.modalSectionLabel}>취미</Text>
+                <Text style={[styles.modalSectionLabel, {color: colors.textMuted}]}>취미</Text>
                 <View style={styles.modalTags}>
                   {otherProfile.hobby_tags.map(tag => (
-                    <View key={tag} style={styles.modalTag}>
-                      <Text style={styles.modalTagText}>{tag}</Text>
+                    <View key={tag} style={[styles.modalTag, {backgroundColor: colors.tagBg, borderColor: colors.border}]}>
+                      <Text style={[styles.modalTagText, {color: colors.tagText}]}>{tag}</Text>
                     </View>
                   ))}
                 </View>
@@ -581,10 +583,10 @@ export default function ChatRoomScreen() {
             ) : null}
             {otherProfile?.ideal_type_tags?.length ? (
               <>
-                <Text style={styles.modalSectionLabel}>이상형</Text>
+                <Text style={[styles.modalSectionLabel, {color: colors.textMuted}]}>이상형</Text>
                 <View style={styles.modalTags}>
                   {otherProfile.ideal_type_tags.map(tag => (
-                    <View key={tag} style={[styles.modalTag, styles.modalTagIdeal]}>
+                    <View key={tag} style={[styles.modalTag, {backgroundColor: 'rgba(255,112,67,0.18)', borderColor: 'rgba(255,112,67,0.4)'}]}>
                       <Text style={[styles.modalTagText, styles.modalTagIdealText]}>{tag}</Text>
                     </View>
                   ))}
@@ -598,7 +600,7 @@ export default function ChatRoomScreen() {
     </Modal>
 
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, {backgroundColor: colors.bg}]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
       <FlatList
@@ -615,6 +617,7 @@ export default function ChatRoomScreen() {
       <Animated.View
         style={[
           styles.menuPanel,
+          {backgroundColor: colors.bgSecondary, borderTopColor: colors.divider},
           {
             opacity: menuAnim,
             transform: [{translateY: menuAnim.interpolate({inputRange: [0, 1], outputRange: [12, 0]})}],
@@ -629,7 +632,7 @@ export default function ChatRoomScreen() {
           {imageUploading
             ? <ActivityIndicator size="small" color="#4CAF50" />
             : <Text style={styles.menuItemIcon}>📷</Text>}
-          <Text style={styles.menuItemLabel}>사진</Text>
+          <Text style={[styles.menuItemLabel, {color: colors.textSecondary}]}>사진</Text>
         </TouchableOpacity>
         {/* 독점 선언 / 해제 */}
         <TouchableOpacity
@@ -678,20 +681,20 @@ export default function ChatRoomScreen() {
       )}
 
       {/* 입력 바 */}
-      <View style={styles.inputBar}>
+      <View style={[styles.inputBar, {backgroundColor: colors.bgSecondary, borderTopColor: colors.divider}]}>
         <TouchableOpacity
           style={styles.plusBtn}
           onPress={toggleMenu}
           disabled={matchStatus === 'cancelled'}>
-          <Text style={[styles.plusBtnText, menuOpen && styles.plusBtnTextOpen]}>＋</Text>
+          <Text style={[styles.plusBtnText, {color: colors.textMuted}, menuOpen && styles.plusBtnTextOpen]}>＋</Text>
         </TouchableOpacity>
 
         <TextInput
-          style={[styles.input, matchStatus === 'cancelled' && styles.inputDisabled]}
+          style={[styles.input, {backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.textPrimary}, matchStatus === 'cancelled' && styles.inputDisabled]}
           value={text}
           onChangeText={setText}
           placeholder={matchStatus === 'cancelled' ? '매칭이 취소됐어요' : '메시지를 입력하세요'}
-          placeholderTextColor="#aaa"
+          placeholderTextColor={colors.textPlaceholder}
           multiline
           maxLength={500}
           returnKeyType="send"

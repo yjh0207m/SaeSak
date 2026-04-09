@@ -8,12 +8,14 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import {useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import {RootStackParamList} from '../navigation/RootNavigator';
+import {useTheme} from '../context/ThemeContext';
 
 type Nav = StackNavigationProp<RootStackParamList>;
 
@@ -38,6 +40,7 @@ interface Stats {
 }
 
 export default function MyProfileScreen() {
+  const {colors, mode, toggle} = useTheme();
   const navigation = useNavigation<Nav>();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -121,7 +124,7 @@ export default function MyProfileScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, {backgroundColor: colors.bg}]}>
         <ActivityIndicator size="large" color="#4CAF50" />
       </View>
     );
@@ -130,20 +133,20 @@ export default function MyProfileScreen() {
   const completeness = profile?.completeness ?? 0;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.inner}>
+    <ScrollView style={[styles.container, {backgroundColor: colors.bg}]} contentContainerStyle={styles.inner}>
 
       {/* 헤더 */}
-      <View style={styles.header}>
+      <View style={[styles.header, {backgroundColor: colors.card}]}>
         {profile?.photos?.[0] ? (
           <Image source={{uri: profile.photos[0]}} style={styles.avatar} />
         ) : (
-          <View style={styles.avatarPlaceholder}>
+          <View style={[styles.avatarPlaceholder, {backgroundColor: colors.tagBg}]}>
             <Text style={styles.avatarPlaceholderText}>🌱</Text>
           </View>
         )}
-        <Text style={styles.nickname}>{profile?.nickname ?? '닉네임 없음'}</Text>
+        <Text style={[styles.nickname, {color: colors.textPrimary}]}>{profile?.nickname ?? '닉네임 없음'}</Text>
         {profile?.activity_area ? (
-          <Text style={styles.area}>📍 {profile.activity_area}</Text>
+          <Text style={[styles.area, {color: colors.textMuted}]}>📍 {profile.activity_area}</Text>
         ) : null}
         <TouchableOpacity
           style={styles.editBtn}
@@ -154,12 +157,12 @@ export default function MyProfileScreen() {
 
       {/* 코인 / 프리미엄 */}
       <View style={styles.statsRow}>
-        <TouchableOpacity style={styles.statBox} onPress={() => navigation.navigate('CoinShop')}>
-          <Text style={styles.statValue}>🪙 {userData?.coin_balance ?? 0}</Text>
+        <TouchableOpacity style={[styles.statBox, {backgroundColor: colors.card}]} onPress={() => navigation.navigate('CoinShop')}>
+          <Text style={[styles.statValue, {color: colors.textPrimary}]}>🪙 {userData?.coin_balance ?? 0}</Text>
           <Text style={styles.statLabel}>코인 충전 →</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.statBox} onPress={() => navigation.navigate('Premium')}>
-          <Text style={styles.statValue}>
+        <TouchableOpacity style={[styles.statBox, {backgroundColor: colors.card}]} onPress={() => navigation.navigate('Premium')}>
+          <Text style={[styles.statValue, {color: colors.textPrimary}]}>
             {userData?.is_premium ? '⭐ 프리미엄' : '일반'}
           </Text>
           <Text style={styles.statLabel}>
@@ -169,40 +172,40 @@ export default function MyProfileScreen() {
       </View>
 
       {/* 활동 대시보드 */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>활동 현황</Text>
+      <View style={[styles.section, {backgroundColor: colors.card}]}>
+        <Text style={[styles.sectionTitle, {color: colors.textMuted}]}>활동 현황</Text>
         <View style={styles.dashRow}>
           <View style={styles.dashItem}>
             <Text style={styles.dashValue}>{stats.likes}</Text>
-            <Text style={styles.dashLabel}>받은 좋아요</Text>
+            <Text style={[styles.dashLabel, {color: colors.textMuted}]}>받은 좋아요</Text>
             <Text style={styles.dashEmoji}>♥</Text>
           </View>
-          <View style={styles.dashDivider} />
+          <View style={[styles.dashDivider, {backgroundColor: colors.divider}]} />
           <View style={styles.dashItem}>
             <Text style={[styles.dashValue, {color: '#29b6f6'}]}>{stats.superlikes}</Text>
-            <Text style={styles.dashLabel}>슈퍼라이크</Text>
-            <Text style={styles.dashEmoji}>★</Text>
+            <Text style={[styles.dashLabel, {color: colors.textMuted}]}>슈퍼라이크</Text>
+            <Text style={styles.dashStarEmoji}>★</Text>
           </View>
-          <View style={styles.dashDivider} />
+          <View style={[styles.dashDivider, {backgroundColor: colors.divider}]} />
           <View style={styles.dashItem}>
             <Text style={[styles.dashValue, {color: '#4CAF50'}]}>{stats.matches}</Text>
-            <Text style={styles.dashLabel}>매칭</Text>
+            <Text style={[styles.dashLabel, {color: colors.textMuted}]}>매칭</Text>
             <Text style={styles.dashEmoji}>💚</Text>
           </View>
         </View>
       </View>
 
       {/* 프로필 완성도 */}
-      <View style={styles.section}>
+      <View style={[styles.section, {backgroundColor: colors.card}]}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>프로필 완성도</Text>
+          <Text style={[styles.sectionTitle, {color: colors.textMuted}]}>프로필 완성도</Text>
           <Text style={styles.completenessValue}>{completeness}%</Text>
         </View>
-        <View style={styles.progressBar}>
+        <View style={[styles.progressBar, {backgroundColor: colors.border}]}>
           <View style={[styles.progressFill, {width: `${completeness}%`}]} />
         </View>
         {completeness < 80 ? (
-          <Text style={styles.progressHint}>
+          <Text style={[styles.progressHint, {color: colors.textMuted}]}>
             80% 이상이면 매칭 노출 우선순위가 높아져요
           </Text>
         ) : (
@@ -211,43 +214,62 @@ export default function MyProfileScreen() {
       </View>
 
       {/* 자기소개 */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>자기소개</Text>
+      <View style={[styles.section, {backgroundColor: colors.card}]}>
+        <Text style={[styles.sectionTitle, {color: colors.textMuted}]}>자기소개</Text>
         {profile?.bio ? (
-          <Text style={styles.bio}>{profile.bio}</Text>
+          <Text style={[styles.bio, {color: colors.textSecondary}]}>{profile.bio}</Text>
         ) : (
-          <Text style={styles.empty}>자기소개를 작성해보세요</Text>
+          <Text style={[styles.empty, {color: colors.textMuted}]}>자기소개를 작성해보세요</Text>
         )}
       </View>
 
       {/* 취미 태그 */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>취미</Text>
+      <View style={[styles.section, {backgroundColor: colors.card}]}>
+        <Text style={[styles.sectionTitle, {color: colors.textMuted}]}>취미</Text>
         {profile?.hobby_tags?.length ? (
           <View style={styles.tagRow}>
             {profile.hobby_tags.map(tag => (
-              <View key={tag} style={styles.tag}>
-                <Text style={styles.tagText}>{tag}</Text>
+              <View key={tag} style={[styles.tag, {backgroundColor: colors.tagBg}]}>
+                <Text style={[styles.tagText, {color: colors.tagText}]}>{tag}</Text>
               </View>
             ))}
           </View>
         ) : (
-          <Text style={styles.empty}>취미 태그를 추가해보세요</Text>
+          <Text style={[styles.empty, {color: colors.textMuted}]}>취미 태그를 추가해보세요</Text>
         )}
       </View>
 
       {/* 메뉴 */}
-      <View style={styles.menuSection}>
+      <View style={[styles.menuSection, {backgroundColor: colors.card}]}>
         {[
           {label: '코인 충전', onPress: () => navigation.navigate('CoinShop')},
           {label: '프리미엄 구독', onPress: () => navigation.navigate('Premium')},
           {label: '프로필 편집', onPress: () => navigation.navigate('EditProfile')},
         ].map(item => (
-          <TouchableOpacity key={item.label} style={styles.menuItem} onPress={item.onPress}>
-            <Text style={styles.menuItemText}>{item.label}</Text>
-            <Text style={styles.menuArrow}>›</Text>
+          <TouchableOpacity key={item.label} style={[styles.menuItem, {borderBottomColor: colors.divider}]} onPress={item.onPress}>
+            <Text style={[styles.menuItemText, {color: colors.textPrimary}]}>{item.label}</Text>
+            <Text style={[styles.menuArrow, {color: colors.textMuted}]}>›</Text>
           </TouchableOpacity>
         ))}
+      </View>
+
+      {/* 설정 */}
+      <View style={[styles.menuSection, {backgroundColor: colors.card}]}>
+        <Text style={[styles.settingsSectionLabel, {color: colors.textMuted}]}>설정</Text>
+        <View style={[styles.menuItem, {borderBottomColor: 'transparent'}]}>
+          <View style={styles.settingsRow}>
+            <Text style={styles.settingsIcon}>{mode === 'dark' ? '🌙' : '☀️'}</Text>
+            <Text style={[styles.menuItemText, {color: colors.textPrimary}]}>
+              {mode === 'dark' ? '다크 모드' : '라이트 모드'}
+            </Text>
+          </View>
+          <Switch
+            value={mode === 'dark'}
+            onValueChange={toggle}
+            trackColor={{false: '#e0e0e0', true: '#4CAF50'}}
+            thumbColor="#fff"
+          />
+        </View>
       </View>
 
       {/* 로그아웃 */}
@@ -325,10 +347,18 @@ const styles = StyleSheet.create({
   },
   logoutText: {color: '#ff5252', fontSize: 15, fontWeight: '600'},
 
+  settingsSectionLabel: {
+    fontSize: 12, fontWeight: '600', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4,
+    textTransform: 'uppercase', letterSpacing: 0.5,
+  },
+  settingsRow: {flexDirection: 'row', alignItems: 'center', gap: 8},
+  settingsIcon: {fontSize: 18},
+
   dashRow: {flexDirection: 'row', alignItems: 'center', marginTop: 8},
   dashItem: {flex: 1, alignItems: 'center', paddingVertical: 8},
   dashValue: {fontSize: 26, fontWeight: '800', color: '#ff4458'},
   dashLabel: {fontSize: 12, color: '#888', marginTop: 2},
   dashEmoji: {fontSize: 16, marginTop: 4},
+  dashStarEmoji: {fontSize: 26, marginTop: 2, color: '#29b6f6'},
   dashDivider: {width: 1, height: 40, backgroundColor: '#f0f0f0'},
 });

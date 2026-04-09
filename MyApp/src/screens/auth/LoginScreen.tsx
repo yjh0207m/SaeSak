@@ -14,10 +14,8 @@ import {
 } from 'react-native';
 import auth, {FirebaseAuthTypes} from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
-import functions from '@react-native-firebase/functions';
 import {GoogleSignin} from '@react-native-google-signin/google-signin';
 import KakaoUser from '@react-native-kakao/user';
-import NaverLogin from '@react-native-seoul/naver-login';
 import {StackNavigationProp} from '@react-navigation/stack';
 import {AuthStackParamList} from '../../navigation/AuthStack';
 
@@ -25,14 +23,6 @@ const WEB_CLIENT_ID = '420359268221-rran1o958fh75hl73ba1t74au6bsd2ov.apps.google
 
 // ── 외부 SDK 초기화 ──────────────────────────────────────────
 GoogleSignin.configure({webClientId: WEB_CLIENT_ID});
-
-NaverLogin.initialize({
-  appName: '새싹',
-  consumerKey: '89L0gMzLAYR_8XjcGwiT',       // 네이버 개발자 콘솔에서 발급
-  consumerSecret: '9i7A4o2wXg', // 네이버 개발자 콘솔에서 발급
-  serviceUrlSchemeIOS: 'naversaesak',
-  disableNaverAppAuthIOS: false,
-});
 
 type Props = {
   navigation: StackNavigationProp<AuthStackParamList, 'Login'>;
@@ -89,7 +79,6 @@ export default function LoginScreen({navigation}: Props) {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [kakaoLoading, setKakaoLoading] = useState(false);
-  const [naverLoading, setNaverLoading] = useState(false);
   const [facebookLoading] = useState(false);
 
   // ── 휴대폰 인증 모달 state ───────────────────────────────
@@ -168,29 +157,8 @@ export default function LoginScreen({navigation}: Props) {
     }
   };
 
-  // ── 네이버 로그인 ────────────────────────────────────────
-  const handleNaverLogin = async () => {
-    try {
-      setNaverLoading(true);
-      const {isSuccess, successResponse, failureResponse} = await NaverLogin.login();
-      if (!isSuccess || !successResponse) {
-        if (failureResponse?.message) {
-          Alert.alert('네이버 로그인 실패', failureResponse.message);
-        }
-        return;
-      }
-      // Cloud Function으로 Custom Token 획득
-      const result = await functions().httpsCallable('naverLogin')({
-        accessToken: successResponse.accessToken,
-      });
-      const {customToken} = result.data as {customToken: string};
-      await auth().signInWithCustomToken(customToken);
-      // users 문서는 Cloud Function에서 생성됨
-    } catch (error: any) {
-      Alert.alert('네이버 로그인 실패', error.message ?? '오류가 발생했습니다.');
-    } finally {
-      setNaverLoading(false);
-    }
+  const handleNaverLogin = () => {
+    Alert.alert('준비 중', '네이버 로그인은 곧 지원 예정이에요.');
   };
 
   // ── Facebook 로그인 (준비 중) ────────────────────────────
@@ -402,7 +370,7 @@ export default function LoginScreen({navigation}: Props) {
           emojiStyle={styles.naverEmoji}
           style={styles.naverButton}
           textStyle={styles.naverButtonText}
-          loading={naverLoading}
+          loading={false}
           loaderColor="#fff"
           onPress={handleNaverLogin}
         />

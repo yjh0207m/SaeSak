@@ -15,6 +15,7 @@ import {StackNavigationProp} from '@react-navigation/stack';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import {RootStackParamList} from '../../navigation/RootNavigator';
+import {useTheme} from '../../context/ThemeContext';
 
 interface FlirtingItem {
   id: string;
@@ -58,6 +59,7 @@ function formatListTime(ts: number | null | undefined): string {
 }
 
 export default function ChatListScreen() {
+  const {colors} = useTheme();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const [matches, setMatches] = useState<MatchItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -240,10 +242,10 @@ export default function ChatListScreen() {
         )}
         <View style={styles.info}>
           <View style={styles.topRow}>
-            <Text style={styles.nickname}>{item.otherNickname}</Text>
-            <Text style={styles.time}>{time}</Text>
+            <Text style={[styles.nickname, {color: colors.textPrimary}]}>{item.otherNickname}</Text>
+            <Text style={[styles.time, {color: colors.textMuted}]}>{time}</Text>
           </View>
-          <Text style={styles.lastMsg} numberOfLines={1}>
+          <Text style={[styles.lastMsg, {color: colors.textSecondary}]} numberOfLines={1}>
             {lastText}
           </Text>
         </View>
@@ -253,19 +255,19 @@ export default function ChatListScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, {backgroundColor: colors.bg}]}>
         <ActivityIndicator size="large" color="#4CAF50" />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>💬 채팅</Text>
+    <View style={[styles.container, {backgroundColor: colors.bg}]}>
+      <Text style={[styles.header, {color: colors.textPrimary}]}>💬 채팅</Text>
 
       {/* 플러팅 수신함 */}
       {flirtings.length > 0 && (
-        <View style={styles.flirtSection}>
+        <View style={[styles.flirtSection, {borderBottomColor: colors.divider}]}>
           <Text style={styles.flirtTitle}>💌 플러팅 {flirtings.length}건</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.flirtScroll}>
             {flirtings.map(item => (
@@ -292,15 +294,15 @@ export default function ChatListScreen() {
       {matches.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.emptyIcon}>🌱</Text>
-          <Text style={styles.emptyText}>아직 매칭된 상대가 없어요</Text>
-          <Text style={styles.emptySub}>탐색 탭에서 새싹을 찾아보세요!</Text>
+          <Text style={[styles.emptyText, {color: colors.textPrimary}]}>아직 매칭된 상대가 없어요</Text>
+          <Text style={[styles.emptySub, {color: colors.textMuted}]}>탐색 탭에서 새싹을 찾아보세요!</Text>
         </View>
       ) : (
         <FlatList
           data={matches}
           keyExtractor={item => item.matchId}
           renderItem={renderItem}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ItemSeparatorComponent={() => <View style={[styles.separator, {backgroundColor: colors.divider}]} />}
         />
       )}
     </View>

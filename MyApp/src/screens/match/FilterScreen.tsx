@@ -10,6 +10,7 @@ import {
 import {useNavigation} from '@react-navigation/native';
 import {HOBBY_TAGS} from '../../utils/constants';
 import useMatchStore, {DEFAULT_FILTER, FilterSettings} from '../../store/matchStore';
+import {useTheme} from '../../context/ThemeContext';
 
 const DISTANCE_OPTIONS = [5, 10, 30, 50, 0] as const; // 0 = 전체
 const DISTANCE_LABELS: Record<number, string> = {
@@ -24,6 +25,7 @@ const AGE_MIN_LIMIT = 18;
 const AGE_MAX_LIMIT = 80;
 
 export default function FilterScreen() {
+  const {colors} = useTheme();
   const navigation = useNavigation();
   const {filter, setFilter, resetFilter} = useMatchStore();
 
@@ -97,17 +99,17 @@ export default function FilterScreen() {
     hobbyTags.length > 0;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.inner}>
+    <ScrollView style={[styles.container, {backgroundColor: colors.bg}]} contentContainerStyle={styles.inner}>
 
       {/* 나이 범위 */}
-      <Text style={styles.sectionTitle}>나이 범위</Text>
-      <View style={styles.card}>
+      <Text style={[styles.sectionTitle, {color: colors.textPrimary}]}>나이 범위</Text>
+      <View style={[styles.card, {backgroundColor: colors.card}]}>
         <View style={styles.ageRow}>
           <View style={styles.ageSide}>
             <Text style={styles.ageLabel}>최소</Text>
             <View style={styles.stepper}>
-              <TouchableOpacity style={styles.stepBtn} onPress={() => adjustMinAge(-1)}>
-                <Text style={styles.stepBtnText}>−</Text>
+              <TouchableOpacity style={[styles.stepBtn, {backgroundColor: colors.bgSecondary}]} onPress={() => adjustMinAge(-1)}>
+                <Text style={[styles.stepBtnText, {color: colors.textPrimary}]}>−</Text>
               </TouchableOpacity>
               {editingMin ? (
                 <TextInput
@@ -122,22 +124,22 @@ export default function FilterScreen() {
                 />
               ) : (
                 <TouchableOpacity onPress={() => { setMinInput(String(minAge)); setEditingMin(true); }}>
-                  <Text style={styles.ageValue}>{minAge}세</Text>
+                  <Text style={[styles.ageValue, {color: colors.textPrimary}]}>{minAge}세</Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity style={styles.stepBtn} onPress={() => adjustMinAge(1)}>
-                <Text style={styles.stepBtnText}>+</Text>
+              <TouchableOpacity style={[styles.stepBtn, {backgroundColor: colors.bgSecondary}]} onPress={() => adjustMinAge(1)}>
+                <Text style={[styles.stepBtnText, {color: colors.textPrimary}]}>+</Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          <Text style={styles.ageDash}>~</Text>
+          <Text style={[styles.ageDash, {color: colors.textMuted}]}>~</Text>
 
           <View style={styles.ageSide}>
-            <Text style={styles.ageLabel}>최대</Text>
+            <Text style={[styles.ageLabel, {color: colors.textMuted}]}>최대</Text>
             <View style={styles.stepper}>
-              <TouchableOpacity style={styles.stepBtn} onPress={() => adjustMaxAge(-1)}>
-                <Text style={styles.stepBtnText}>−</Text>
+              <TouchableOpacity style={[styles.stepBtn, {backgroundColor: colors.bgSecondary}]} onPress={() => adjustMaxAge(-1)}>
+                <Text style={[styles.stepBtnText, {color: colors.textPrimary}]}>−</Text>
               </TouchableOpacity>
               {editingMax ? (
                 <TextInput
@@ -152,11 +154,11 @@ export default function FilterScreen() {
                 />
               ) : (
                 <TouchableOpacity onPress={() => { setMaxInput(String(maxAge)); setEditingMax(true); }}>
-                  <Text style={styles.ageValue}>{maxAge}세</Text>
+                  <Text style={[styles.ageValue, {color: colors.textPrimary}]}>{maxAge}세</Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity style={styles.stepBtn} onPress={() => adjustMaxAge(1)}>
-                <Text style={styles.stepBtnText}>+</Text>
+              <TouchableOpacity style={[styles.stepBtn, {backgroundColor: colors.bgSecondary}]} onPress={() => adjustMaxAge(1)}>
+                <Text style={[styles.stepBtnText, {color: colors.textPrimary}]}>+</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -182,20 +184,22 @@ export default function FilterScreen() {
       </View>
 
       {/* 거리 범위 */}
-      <Text style={styles.sectionTitle}>거리 범위</Text>
-      <View style={styles.card}>
+      <Text style={[styles.sectionTitle, {color: colors.textPrimary}]}>거리 범위</Text>
+      <View style={[styles.card, {backgroundColor: colors.card}]}>
         <View style={styles.distanceRow}>
           {DISTANCE_OPTIONS.map(d => (
             <TouchableOpacity
               key={d}
               style={[
                 styles.distanceBtn,
+                {borderColor: colors.border},
                 maxDistance === d && styles.distanceBtnActive,
               ]}
               onPress={() => setMaxDistance(d)}>
               <Text
                 style={[
                   styles.distanceBtnText,
+                  {color: colors.textSecondary},
                   maxDistance === d && styles.distanceBtnTextActive,
                 ]}>
                 {DISTANCE_LABELS[d]}
@@ -203,29 +207,30 @@ export default function FilterScreen() {
             </TouchableOpacity>
           ))}
         </View>
-        <Text style={styles.distanceHint}>
+        <Text style={[styles.distanceHint, {color: colors.textMuted}]}>
           * 정확한 거리 필터는 위치 정보 활성화 후 적용됩니다
         </Text>
       </View>
 
       {/* 취미 태그 */}
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>취미 태그</Text>
+        <Text style={[styles.sectionTitle, {color: colors.textPrimary}]}>취미 태그</Text>
         {hobbyTags.length > 0 && (
           <Text style={styles.tagCount}>{hobbyTags.length}개 선택</Text>
         )}
       </View>
-      <View style={styles.card}>
-        <Text style={styles.tagHint}>선택한 태그 중 하나라도 일치하면 노출돼요</Text>
+      <View style={[styles.card, {backgroundColor: colors.card}]}>
+        <Text style={[styles.tagHint, {color: colors.textMuted}]}>선택한 태그 중 하나라도 일치하면 노출돼요</Text>
         <View style={styles.tagGrid}>
           {HOBBY_TAGS.map(tag => (
             <TouchableOpacity
               key={tag}
-              style={[styles.tag, hobbyTags.includes(tag) && styles.tagActive]}
+              style={[styles.tag, {borderColor: colors.border}, hobbyTags.includes(tag) && styles.tagActive]}
               onPress={() => toggleTag(tag)}>
               <Text
                 style={[
                   styles.tagText,
+                  {color: colors.textSecondary},
                   hobbyTags.includes(tag) && styles.tagTextActive,
                 ]}>
                 {tag}

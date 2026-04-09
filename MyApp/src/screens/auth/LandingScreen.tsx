@@ -17,10 +17,8 @@ import {
 } from 'react-native';
 import auth, {FirebaseAuthTypes} from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
-import functions from '@react-native-firebase/functions';
 import {GoogleSignin} from '@react-native-google-signin/google-signin';
 import KakaoUser from '@react-native-kakao/user';
-import NaverLogin from '@react-native-seoul/naver-login';
 import {useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import {AuthStackParamList} from '../../navigation/AuthStack';
@@ -95,7 +93,6 @@ export default function LandingScreen() {
   const [loginModalVisible, setLoginModalVisible] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [kakaoLoading, setKakaoLoading] = useState(false);
-  const [naverLoading, setNaverLoading] = useState(false);
 
   const [phoneModalVisible, setPhoneModalVisible] = useState(false);
   const [phoneStep, setPhoneStep] = useState<'input' | 'otp'>('input');
@@ -173,28 +170,8 @@ export default function LandingScreen() {
     }
   };
 
-  // ── 네이버 ───────────────────────────────────────────────────
-  const handleNaverLogin = async () => {
-    try {
-      setNaverLoading(true);
-      const {isSuccess, successResponse, failureResponse} = await NaverLogin.login();
-      if (!isSuccess || !successResponse) {
-        if (failureResponse?.message) {
-          Alert.alert('네이버 로그인 실패', failureResponse.message);
-        }
-        return;
-      }
-      const result = await functions().httpsCallable('naverLogin')({
-        accessToken: successResponse.accessToken,
-      });
-      const {customToken} = result.data as {customToken: string};
-      await auth().signInWithCustomToken(customToken);
-      setLoginModalVisible(false);
-    } catch (error: any) {
-      Alert.alert('네이버 로그인 실패', error.message ?? '오류가 발생했습니다.');
-    } finally {
-      setNaverLoading(false);
-    }
+  const handleNaverLogin = () => {
+    Alert.alert('준비 중', '네이버 로그인은 곧 지원 예정이에요.');
   };
 
   const handleFacebookLogin = () => {
@@ -353,7 +330,7 @@ export default function LandingScreen() {
 
             <LoginBtn emoji="🔍" label="Google로 계속하기" style={styles.googleBtn} textStyle={styles.googleText} loading={googleLoading} loaderColor="#555" onPress={handleGoogleLogin} />
             <LoginBtn emoji="💬" label="카카오로 계속하기" style={styles.kakaoBtn} textStyle={styles.kakaoText} loading={kakaoLoading} loaderColor="#3C1E1E" onPress={handleKakaoLogin} />
-            <LoginBtn emoji="N" emojiStyle={styles.naverEmoji} label="네이버로 계속하기" style={styles.naverBtn} textStyle={styles.naverText} loading={naverLoading} loaderColor="#fff" onPress={handleNaverLogin} />
+            <LoginBtn emoji="N" emojiStyle={styles.naverEmoji} label="네이버로 계속하기" style={styles.naverBtn} textStyle={styles.naverText} loading={false} loaderColor="#fff" onPress={handleNaverLogin} />
             <LoginBtn emoji="f" emojiStyle={styles.fbEmoji} label="Facebook으로 계속하기" style={styles.fbBtn} textStyle={styles.fbText} loading={false} loaderColor="#fff" onPress={handleFacebookLogin} />
             <LoginBtn emoji="📱" label="휴대폰 번호로 계속하기" style={styles.phoneBtn} textStyle={styles.phoneText} loading={false} loaderColor="#fff" onPress={openPhoneModal} />
 
